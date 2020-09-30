@@ -9,7 +9,7 @@ import datetime
 from scipy.ndimage.filters import uniform_filter
 from scipy.ndimage.measurements import variance
 
-#summaryからファイル名などを取得
+
 def get_fileinfo(folder_name):
     with open(folder_name+'/summary.txt') as f:
         summary=f.read().split('\n')
