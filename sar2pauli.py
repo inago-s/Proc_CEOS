@@ -39,8 +39,8 @@ def get_fileinfo(folder_name):
 
 
 def main():    
-    file_name=sys.argv[1]
-    HH_filename,HV_filename,VV_filename,VH_filename,time,npixels,nlines=get_fileinfo(file_name)
+    folder_name=sys.argv[1]
+    HH_filename,HV_filename,VV_filename,VH_filename,time,npixels,nlines=get_fileinfo(folder_name)
     nrec=544+npixels*8
     pic=np.empty((nlines,npixels,3),dtype=np.float32)
 
