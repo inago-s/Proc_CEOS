@@ -9,7 +9,6 @@ import datetime
 from scipy.ndimage.filters import uniform_filter
 from scipy.ndimage.measurements import variance
 
-
 def get_fileinfo(folder_name):
     with open(folder_name+'/summary.txt') as f:
         summary=f.read().split('\n')
@@ -38,6 +37,18 @@ def get_fileinfo(folder_name):
     
     return HH_filename,HV_filename,VV_filename,VH_filename,time
 
+def read_bin(file,h,nrec):
+    with open(file,mode='rb') as fp:
+        fp.seek(720+nrec*h)
+        data = struct.unpack(">%s"%(int((nrec)/4))+"f",fp.read(int(nrec)))
+        data = np.array(data).reshape(-1,int(nrec/4))
+        data = data[:,int(544/4):int(nrec/4)]
+        slc = data[:,::2] + 1j*data[:,1::2]
+
+    return slc
+
+def Process_Pauli(hh,hv,vv,vh):
+    return abs(hh-hv),abs(hv+vh),abs(hh+vv)
 
 def main():    
     folder_name=sys.argv[1]
@@ -46,38 +57,10 @@ def main():
     pic=np.empty((nlines,npixels,3),dtype=np.float32)
 
     for h in range(nlines):
-        with open(HH_filename,mode='rb') as fp_hh:
-            fp_hh.seek(720+nrec*h)
-            data = struct.unpack(">%s"%(int((nrec)/4))+"f",fp_hh.read(int(nrec)))
-            data = np.array(data).reshape(-1,int(nrec/4))
-            data = data[:,int(544/4):int(nrec/4)]
-            slc_hh = data[:,::2] + 1j*data[:,1::2]
+        slc_hh,slc_hv,slc_vv,slc_vh=read_bin(HH_filename,h,nrec),read_bin(HV_filename,h,nrec),read_bin(VV_filename,h,nrec),read_bin(VH_filename,h,nrec)
 
-        with open(HV_filename,mode='rb') as fp_hv:
-            fp_hv.seek(720+nrec*h)
-            data = struct.unpack(">%s"%(int((nrec)/4))+"f",fp_hv.read(int(nrec)))
-            data = np.array(data).reshape(-1,int(nrec/4))
-            data = data[:,int(544/4):int(nrec/4)]
-            slc_hv = data[:,::2] + 1j*data[:,1::2]
-    
 
-        with open(VV_filename,mode='rb') as fp_vv:
-            fp_vv.seek(720+nrec*h)
-            data = struct.unpack(">%s"%(int((nrec)/4))+"f",fp_vv.read(int(nrec)))
-            data = np.array(data).reshape(-1,int(nrec/4))
-            data = data[:,int(544/4):int(nrec/4)]
-            slc_vv = data[:,::2] + 1j*data[:,1::2]
-
-        with open(VH_filename,mode='rb') as fp_vh:
-            fp_vh.seek(720+nrec*h)
-            data = struct.unpack(">%s"%(int((nrec)/4))+"f",fp_vh.read(int(nrec)))
-            data = np.array(data).reshape(-1,int(nrec/4))
-            data = data[:,int(544/4):int(nrec/4)]
-            slc_vh = data[:,::2] + 1j*data[:,1::2]
-
-        r=abs(slc_hh-slc_vv)
-        b=abs(slc_hh+slc_vv)
-        g=abs(slc_hv+slc_vh)
+        r,g,b=Process_Pauli(slc_hh,slc_hv,slc_vv,slc_vh)
 
         pic[h]=np.stack([r,g,b],2)
 
