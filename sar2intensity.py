@@ -54,7 +54,7 @@ def get_fileinfo(folder_name):
     return HH_file, HV_file, VV_file, VH_file, nline, ncell, LED_file
 
 
-def get_gcp(file, L, P):
+def get_gcp_three(file, L, P):
     gcp = []
     with open(file, mode='rb') as f:
         gcp_L = np.linspace(0, L-1, int((L/1000)+1), dtype='int')
@@ -75,13 +75,15 @@ def get_gcp(file, L, P):
     return gcp
 
 
-def get_gcp2(file, L, P):
+def get_gcp_conv(file, L, P):
     with open(file, mode='rb') as f:
         f.seek(1604432+1024)
         # 緯度変換係数
-        coefficient_lat = [float(f.read(20)) for i in range(25)]
+        coefficient_lat = [float(f.read(20)) for _ in range(25)]
+        print(coefficient_lat)
         # 経度変換係数
-        coefficient_lon = [float(f.read(20)) for i in range(25)]
+        coefficient_lon = [float(f.read(20)) for _ in range(25)]
+        print(coefficient_lon)
 
         gcp_L = np.linspace(0, L, int((L/1000)+1), dtype='int')
         gcp_P = np.linspace(0, P, int((P/1000)+1), dtype='int')
@@ -144,16 +146,21 @@ def main():
 
     file_name = os.path.join(folder_name, seen)
 
-    make_intensity(nlines, npixels, HH_file, CF, file_name+'HH')
-    gcpList = get_gcp(HH_file, nlines, npixels)
-    # gcpList = get_gcp2(LED_file, nlines, npixels)
+    #make_intensity(nlines, npixels, HH_file, CF, file_name+'HH')
+    #make_intensity(nlines, npixels, HH_file, CF, file_name+'HV')
+    #make_intensity(nlines, npixels, HH_file, CF, file_name+'VV')
+    #make_intensity(nlines, npixels, HH_file, CF, file_name+'VH')
 
-    with open(os.path.join(folder_name, seen)+'.points', mode='w') as f:
-        f.write("mapX,mapY,pixelX,pixelY,enable,dX,dY,residual\n")
+    gcpList = get_gcp_conv(LED_file, nlines, npixels)
+    #gcpList = get_gcp_three(HH_file, nlines, npixels)
+
+    with open(os.path.join(folder_name, seen)+'.points2', mode='w') as f:
+        s = ""
         for g in gcpList:
-            s = ",".join(
-                [str(g.GCPX), str(g.GCPY), str(g.GCPPixel), str(-g.GCPLine), '1', '0', '0', '0\n'])
-            f.writelines(s)
+            s += " -gcp "
+            s += " ".join(
+                [str(int(g.GCPPixel)), str(int(g.GCPLine)), str(g.GCPX), str(g.GCPY)])
+        f.write(s)
 
 
 if __name__ == '__main__':

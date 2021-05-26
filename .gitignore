@@ -1,5 +1,8 @@
-*.tiff
+*.tif
 *.png
 *.jpeg
 *.jpg
 *.points
+.vscode
+test.py
+__pycache__
