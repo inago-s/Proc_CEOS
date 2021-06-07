@@ -6,3 +6,15 @@
 .vscode
 test.py
 __pycache__
+memo.txt
+demo*/
+test*/
+GT_image/
+image/
+model/
+pddata/
+make*.py
+*demo*
+test*
+*.sh
+sar2intensity.py
