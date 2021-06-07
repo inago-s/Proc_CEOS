@@ -154,13 +154,17 @@ class Proc_CEOS:
             exit()
 
         sigma, phase = self.get_intensity(Pol_file, s_x, s_y, w, h)
+        sigma_img = np.array(255*(sigma-np.amin(sigma)) /
+                             (np.amax(sigma)-np.amin(sigma)), dtype="uint8")
+        phase_img = np.array(255*(phase - np.amin(phase)) /
+                             (np.amax(phase) - np.amin(phase)), dtype="uint8")
         name = str(self.seen_id)+'_' + \
             Pol_file.split('-')[2]+'_'+str(s_y)+'-'+str(s_x)
         if folder is None:
             plt.imsave(os.path.join(self.folder, name) +
-                       '_sigma.png', sigma, cmap='gray')
+                       '_sigma.png', sigma_img, cmap='gray')
             plt.imsave(os.path.join(self.folder, name) +
-                       '_phase.png', phase, cmap='jet')
+                       '_phase.png', phase_img, cmap='jet')
         else:
             plt.imsave(os.path.join(folder, name) +
                        '_sigma.png', sigma, cmap='gray')
@@ -203,10 +207,6 @@ class Proc_CEOS:
             slc = slc[:, s_x:s_x+w]
 
         sigma = 20*np.log10(abs(slc))+self.CF-32.0
-        sigma = np.array(255*(sigma-np.amin(sigma)) /
-                         (np.amax(sigma)-np.amin(sigma)), dtype="uint8")
         phase = np.angle(slc)
-        phase = np.array(255*(phase - np.amin(phase)) /
-                         (np.amax(phase) - np.amin(phase)), dtype="uint8")
 
         return sigma, phase
