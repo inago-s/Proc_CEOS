@@ -1,16 +1,29 @@
 import itertools
 import os
 import struct
-from typing import NoReturn, Tuple
+from typing import Tuple
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
+from PIL import Image
 
 
 class Proc_CEOS:
+    v21_colors = ['#ffffff', '#000064', '#ff0000', '#0080ff', '#ffc1bf',
+                  '#ffff00', '#80ff00', '#00ff80', '#56ac00', '#00ac56',
+                  '#806400', '#D9F003', '#A22978']
+    v2103cmap = ListedColormap(v21_colors, name='ver2103')
+    v18_colors = ['#ffffff', '#000064', '#ff0000', '#0080ff', '#ffc1bf',
+                  '#ffff00', '#80ff00', '#00ff80', '#56ac00', '#00ac56', '#806400']
+    v1803cmap = ListedColormap(v18_colors, name='ver2803')
+
     def __init__(self, folder) -> None:
         self.folder = folder
         self.HH_file = self.HV_file = self.VV_file = self.VH_file \
             = self.LED_file = self.nline = self.ncell = None
+        self.GT_PATH = ''
+        self.GT_FILE_LIST = {}
+        self.cmap = None
 
         filelist = os.listdir(folder)
 
@@ -71,6 +84,12 @@ class Proc_CEOS:
             print('LED file connot be found.')
             exit()
 
+    def __get_filename(self, folder, name) -> str:
+        if folder is None:
+            return os.path.join(self.folder, name)
+        else:
+            return os.path.join(folder, name)
+
     def get_gcp_three(self) -> list:
         gcp = []
         with open(str(self.main_file), mode='rb') as f:
@@ -100,10 +119,16 @@ class Proc_CEOS:
 
         return np.dot(self.coefficient_lon, lp_matrix), np.dot(self.coefficient_lat, lp_matrix)
 
-    def make_gcp(self, x, y, w, h, folder) -> None:
-        with open(os.path.join(folder, self.seen_id)+str(y)+'-'+str(x)+'.points', mode='w') as f:
+    def make_gcp(self, x, y, w, h, folder=None) -> None:
+        filename = self.seen_id+'-'+str(y)+'-'+str(x)+'.points'
+        filename = self.__get_filename(folder, filename)
+
+        with open(filename, mode='w') as f:
             s = ""
-            for _x, _y in itertools.product(np.linspace(x, x+w, 5).astype('int'), np.linspace(y, y+h, 5).astype('int')):
+            x_l = np.linspace(x, x+w, 5, dtype='int')
+            y_l = np.linspace(y, y+h, 5, dtype='int')
+
+            for _x, _y in itertools.product(x_l, y_l):
                 s += " -gcp "
                 lon, lat = self.get_lon_lat(x+_x, y+_y)
                 s += " ".join(
@@ -136,18 +161,13 @@ class Proc_CEOS:
                              (np.amax(sigma)-np.amin(sigma)), dtype="uint8")
         phase_img = np.array(255*(phase - np.amin(phase)) /
                              (np.amax(phase) - np.amin(phase)), dtype="uint8")
-        name = str(self.seen_id)+'_' + \
-            Pol_file.split('-')[2]+'_'+str(y)+'-'+str(x)
-        if folder is None:
-            plt.imsave(os.path.join(self.folder, name) +
-                       '_sigma.png', sigma_img, cmap='gray')
-            plt.imsave(os.path.join(self.folder, name) +
-                       '_phase.png', phase_img, cmap='jet')
-        else:
-            plt.imsave(os.path.join(folder, name) +
-                       '_sigma.png', sigma, cmap='gray')
-            plt.imsave(os.path.join(folder, name) +
-                       '_phase.png', phase, cmap='jet')
+        filename = str(self.seen_id)+'-' + str(y)+'-' + \
+            str(x)+'__'+Pol_file.split('-')[2]
+
+        filename = self.__get_filename(folder, filename)
+
+        plt.imsave(filename+'_sigma.png', sigma_img, cmap='gray')
+        plt.imsave(filename+'_pahse.png', phase_img, cmap='jet')
 
         return sigma, phase
 
@@ -188,3 +208,43 @@ class Proc_CEOS:
         phase = np.angle(slc)
 
         return sigma, phase
+
+    def get_GT(self, lat, lon) -> np.ndarray:
+        filename = os.path.join(self.GT_PATH, 'LC_N' +
+                                str(int(lat))+'E'+str(int(lon))+'.tif')
+        if filename not in self.GT_FILE_LIST.keys():
+            img = Image.open(filename)
+            self.GT_FILE_LIST[filename] = np.array(img)
+
+        h_l, w_l = self.GT_FILE_LIST[filename].shape
+
+        h, w = (h_l-1)-int((lat-int(lat))/(1 / h_l)
+                           ), int((lon-int(lon))/(1 / w_l))
+
+        return self.GT_FILE_LIST[filename][h][w]
+
+    def make_GT_img(self, GT, x, y, w, h, folder=None) -> None:
+        GT = np.array(GT)
+        GT = GT.reshape(h, w)
+        GT = np.flipud(GT)
+        GT = np.rot90(GT, -1)
+        GT[GT == 255] = 0
+
+        filename = self.seen_id+'-'+str(y)+'-'+str(x)+'__' + 'GT.png'
+        filename = self.__get_filename(folder, filename)
+
+        if 'ver2103' in self.GT_PATH:
+            plt.imsave(filename, GT,
+                       cmap=self.v2103cmap, vmin=0, vmax=13)
+        elif 'ver1803' in self.GT_PATH:
+            plt.imsave(filename, GT,
+                       cmap=self.v1803cmap, vmin=0, vmax=11)
+        else:
+            if not self.cmap:
+                print('you need set cmap')
+            else:
+                plt.imsave(filename, GT,
+                           cmap=self.cmap, vmin=0, vmax=self.cmap.N)
+
+    def set_cmap(self, colors) -> None:
+        self.cmap = ListedColormap(colors, name='custom')
