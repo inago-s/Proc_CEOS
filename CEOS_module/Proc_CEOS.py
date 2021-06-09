@@ -119,7 +119,7 @@ class Proc_CEOS:
 
         return np.dot(self.coefficient_lon, lp_matrix), np.dot(self.coefficient_lat, lp_matrix)
 
-    def make_gcp(self, x, y, w, h, folder=None) -> None:
+    def save_gcp(self, x, y, w, h, folder=None) -> None:
         filename = self.seen_id+'-'+str(y)+'-'+str(x)+'.points'
         filename = self.__get_filename(folder, filename)
 
@@ -135,7 +135,20 @@ class Proc_CEOS:
                     [str(_x), str(_y), str(lon), str(lat)])
             f.write(s)
 
-    def make_intensity_fig(self, Pol_file, x=0, y=0, w=None, h=None, folder=None) -> Tuple[np.ndarray, np.ndarray]:
+    def save_intensity_OverAllfig(self, Pol_file, folder=None) -> None:
+        img = np.empty((self.nline, self.ncell), dtype='float32')
+        for h in range(self.nline):
+            img[h], _ = self.get_intensity(
+                Pol_file, 0, h, self.ncell, 1)
+
+        img = np.array(255*(img-np.amin(img)) /
+                       (np.amax(img)-np.amin(img)), dtype="uint8")
+
+        filename = str(self.seen_id)+'.png'
+        filename = self.__get_filename(folder, filename)
+        plt.imsave(filename, img, cmap='gray')
+
+    def save_intensity_fig(self, Pol_file, x=0, y=0, w=None, h=None, folder=None) -> Tuple[np.ndarray, np.ndarray]:
         if x < 0 or x > self.ncell:
             print('input error')
             exit()
@@ -209,7 +222,7 @@ class Proc_CEOS:
 
         return sigma, phase
 
-    def get_GT(self, lat, lon) -> np.ndarray:
+    def get_GT(self, lat, lon) -> int:
         filename = os.path.join(self.GT_PATH, 'LC_N' +
                                 str(int(lat))+'E'+str(int(lon))+'.tif')
         if filename not in self.GT_FILE_LIST.keys():
@@ -223,7 +236,7 @@ class Proc_CEOS:
 
         return self.GT_FILE_LIST[filename][h][w]
 
-    def make_GT_img(self, GT, x, y, w, h, folder=None) -> None:
+    def save_GT_img(self, GT, x, y, w, h, folder=None) -> None:
         GT = np.array(GT)
         GT = GT.reshape(h, w)
         GT = np.flipud(GT)
