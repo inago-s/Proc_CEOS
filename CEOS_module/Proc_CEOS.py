@@ -1,3 +1,4 @@
+import itertools
 import os
 import struct
 from typing import Tuple
@@ -124,7 +125,7 @@ class Proc_CEOS:
 
         return gcp
 
-    def get_conv_coef(self, pixel, line) -> Tuple[float, float]:
+    def get_lon_lat(self, pixel, line) -> Tuple[float, float]:
         l_matrix = np.array([line**4, line**3, line**2, line**1, 1])
         p_matrix = np.array(
             [[pixel**4], [pixel**3], [pixel**2], [pixel**1], [1]])
@@ -132,34 +133,44 @@ class Proc_CEOS:
 
         return np.dot(self.coefficient_lon, lp_matrix), np.dot(self.coefficient_lat, lp_matrix)
 
-    def make_intensity_fig(self, Pol_file, s_x=0, s_y=0, w=None, h=None, folder=None):
-        if s_x < 0 or s_x > self.ncell:
+    def make_gcp(self, x, y, w, h, folder):
+        with open(os.path.join(folder, self.seen_id)+str(y)+'-'+str(x)+'.points', mode='w') as f:
+            s = ""
+            for _x, _y in itertools.product(np.linspace(x, x+w, 5).astype('int'), np.linspace(y, y+h, 5).astype('int')):
+                s += " -gcp "
+                lon, lat = self.get_lon_lat(x+_x, y+_y)
+                s += " ".join(
+                    [str(_x), str(_y), str(lon), str(lat)])
+            f.write(s)
+
+    def make_intensity_fig(self, Pol_file, x=0, y=0, w=None, h=None, folder=None):
+        if x < 0 or x > self.ncell:
             print('input error')
             exit()
 
-        if s_y < 0 or s_y > self.nline:
+        if y < 0 or y > self.nline:
             print('input error')
             exit()
 
         if w is None:
-            w = self.ncell-s_x
-        elif w > self.ncell-s_x:
+            w = self.ncell-x
+        elif w > self.ncell-x:
             print('input error')
             exit()
 
         if h is None:
-            h = self.nline-s_y
-        elif h > self.nline-s_y:
+            h = self.nline-y
+        elif h > self.nline-y:
             print('input error')
             exit()
 
-        sigma, phase = self.get_intensity(Pol_file, s_x, s_y, w, h)
+        sigma, phase = self.get_intensity(Pol_file, x, y, w, h)
         sigma_img = np.array(255*(sigma-np.amin(sigma)) /
                              (np.amax(sigma)-np.amin(sigma)), dtype="uint8")
         phase_img = np.array(255*(phase - np.amin(phase)) /
                              (np.amax(phase) - np.amin(phase)), dtype="uint8")
         name = str(self.seen_id)+'_' + \
-            Pol_file.split('-')[2]+'_'+str(s_y)+'-'+str(s_x)
+            Pol_file.split('-')[2]+'_'+str(y)+'-'+str(x)
         if folder is None:
             plt.imsave(os.path.join(self.folder, name) +
                        '_sigma.png', sigma_img, cmap='gray')
@@ -173,38 +184,38 @@ class Proc_CEOS:
 
         return sigma, phase
 
-    def get_intensity(self, Pol_file, s_x=0, s_y=0, w=None, h=None):
-        if s_x < 0 or s_x > self.ncell:
+    def get_intensity(self, Pol_file, x=0, y=0, w=None, h=None):
+        if x < 0 or x > self.ncell:
             print('input error')
             exit()
 
-        if s_y < 0 or s_y > self.nline:
+        if y < 0 or y > self.nline:
             print('input error')
             exit()
 
         if w is None:
-            w = self.ncell-s_x
-        elif w > self.ncell-s_x:
+            w = self.ncell-x
+        elif w > self.ncell-x:
             print('input error')
             exit()
 
         if h is None:
-            h = self.nline-s_y
-        elif h > self.nline-s_y:
+            h = self.nline-y
+        elif h > self.nline-y:
             print('input error')
             exit()
 
         nrec = 544+self.ncell*8
 
         with open(Pol_file, mode='rb') as fp:
-            fp.seek(720+int(nrec*s_y))
+            fp.seek(720+int(nrec*y))
             data = struct.unpack(
                 ">%s" % (int((nrec*h)/4))
                 + "f", fp.read(int(nrec*h)))
             data = np.array(data).reshape(-1, int(nrec/4))
             data = data[:, int(544/4):int(nrec/4)]
             slc = data[:, ::2] + 1j*data[:, 1::2]
-            slc = slc[:, s_x:s_x+w]
+            slc = slc[:, x:x+w]
 
         sigma = 20*np.log10(abs(slc))+self.CF-32.0
         phase = np.angle(slc)
