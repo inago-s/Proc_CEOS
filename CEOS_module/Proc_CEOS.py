@@ -1,7 +1,7 @@
 import itertools
 import os
 import struct
-from typing import Tuple
+from typing import Tuple, Union
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
@@ -85,13 +85,78 @@ class Proc_CEOS:
             print('LED file connot be found.')
             exit()
 
+        self.diff_origin_lon = self.diff_origin_lat = None
+        self.lon_func_x = self.lon_func_y \
+            = self.lat_func_x = self.lat_func_y = None
+
+        self.coordinate_flag = self.__set_coordinate_adjust_value()
+
     def __get_filename(self, folder, name) -> str:
         if folder is None:
             return os.path.join(self.folder, name)
         else:
             return os.path.join(folder, name)
 
-    def get_coordinate_three_points(self, line) -> list:
+    def __set_coordinate_adjust_value(self) -> bool:
+        coef_lon, coef_lat = self.__get_lon_lat(0, 0)
+        self.origin_lon, self.origin_lat = \
+            self.get_coordinate_three_points(0)[0]
+
+        if (coef_lon-self.origin_lon) < 1.0e-5 and (coef_lat-self.origin_lat) < 1.0e-5:
+            self.lat_func_x = self.lat_func_y = self.lon_func_x \
+                = self.lon_func_y = np.poly1d([0, 0, 0])
+            return False
+        else:
+            x = [0, self.ncell/2, self.ncell-1]
+            y = [0, int(self.nline/2), self.nline-1]
+            three_lonlat = np.array(
+                [self.get_coordinate_three_points(_y) for _y in y]).reshape(9, 2)
+            coef_latlon = np.array([self.__get_lon_lat(_x, _y)
+                                    for _y, _x in itertools.product(y, x)])
+
+            diff = three_lonlat-coef_latlon
+            self.diff_origin_lon, self.diff_origin_lat = diff[0][0], diff[0][1]
+            f_diff, m_diff, e_diff = diff.reshape(3, 3, 2)
+
+            f_diff_lon = f_diff[:, :1]-f_diff[0][0]
+            f_diff_lat = f_diff[:, 1:2]-f_diff[0][1]
+
+            m_diff_lon = m_diff[:, :1]-m_diff[0][0]
+            m_diff_lat = m_diff[:, 1:2]-m_diff[0][1]
+
+            e_diff_lon = e_diff[:, :1]-e_diff[0][0]
+            e_diff_lat = e_diff[:, 1:2]-e_diff[0][1]
+
+            diff_ave = np.ravel((f_diff_lon+m_diff_lon+e_diff_lon)/3)
+            coeff = np.polyfit(x, diff_ave, 2)
+            self.lon_func_x = np.poly1d(coeff)
+
+            diff_ave = np.ravel((f_diff_lat+m_diff_lat+e_diff_lat)/3)
+            coeff = np.polyfit(x, diff_ave, 2)
+            self.lat_func_x = np.poly1d(coeff)
+
+            f_diff, m_diff, e_diff = diff[::3, ], diff[1::3, ], diff[2::3, ]
+
+            f_diff_lon = f_diff[:, :1]-f_diff[0][0]
+            f_diff_lat = f_diff[:, 1:2]-f_diff[0][1]
+
+            m_diff_lon = m_diff[:, :1]-m_diff[0][0]
+            m_diff_lat = m_diff[:, 1:2]-m_diff[0][1]
+
+            e_diff_lon = e_diff[:, :1]-e_diff[0][0]
+            e_diff_lat = e_diff[:, 1:2]-e_diff[0][1]
+
+            diff_ave = np.ravel((f_diff_lat+m_diff_lat+e_diff_lat)/3)
+            diff_ave = np.ravel(diff_ave/3)
+            coeff = np.polyfit(y, diff_ave, 2)
+            self.lon_func_y = np.poly1d(coeff)
+
+            diff_ave = np.ravel((f_diff_lat+m_diff_lat+e_diff_lat)/3)
+            coeff = np.polyfit(y, diff_ave, 2)
+            self.lat_func_y = np.poly1d(coeff)
+            return True
+
+    def get_coordinate_three_points(self, line) -> Tuple[list, list, list]:
         with open(str(self.main_file), mode='rb') as f:
             f.seek(int(720+(line)*(self.ncell*8+544)+192))
             f_lat = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
@@ -101,9 +166,28 @@ class Proc_CEOS:
             m_lon = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
             e_lon = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
 
-        return [[f_lon, f_lat], [m_lon, m_lat], [e_lon, e_lat]]
+        return [f_lon, f_lat], [m_lon, m_lat], [e_lon, e_lat]
 
-    def get_lon_lat(self, pixel, line) -> Tuple[float, float]:
+    def get_coordinate(self, pixel, line) -> Tuple[float, float]:
+        if self.coordinate_flag:
+            return self.__get_lon_lat_ajust_value(pixel, line)
+        else:
+            return self.__get_lon_lat(pixel, line)
+
+    def __get_lon_lat_ajust_value(self, pixel, line) -> Tuple[float, float]:
+        l_matrix = np.array([line**4, line**3, line**2, line**1, 1])
+        p_matrix = np.array(
+            [[pixel**4], [pixel**3], [pixel**2], [pixel**1], [1]])
+        lp_matrix = np.ravel(l_matrix*p_matrix)
+
+        adjust_lon = self.diff_origin_lon+self.lon_func_x(pixel) +\
+            self.lon_func_y(line)
+        adjust_lat = self.diff_origin_lat+self.lat_func_x(pixel) +\
+            self.lat_func_y(line)
+
+        return np.dot(self.coefficient_lon, lp_matrix)+adjust_lon, np.dot(self.coefficient_lat, lp_matrix)+adjust_lat
+
+    def __get_lon_lat(self, pixel, line) -> Tuple[float, float]:
         l_matrix = np.array([line**4, line**3, line**2, line**1, 1])
         p_matrix = np.array(
             [[pixel**4], [pixel**3], [pixel**2], [pixel**1], [1]])
@@ -122,7 +206,7 @@ class Proc_CEOS:
 
             for _x, _y in itertools.product(x_l, y_l):
                 s += " -gcp "
-                lon, lat = self.get_lon_lat(x+_x, y+_y)
+                lon, lat = self.get_coordinate(x+_x, y+_y)
                 s += " ".join(
                     [str(_x), str(_y), str(lon), str(lat)])
             f.write(s)
