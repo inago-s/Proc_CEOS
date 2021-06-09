@@ -91,7 +91,7 @@ class Proc_CEOS:
         else:
             return os.path.join(folder, name)
 
-    def get_gcp_three(self, line) -> list:
+    def get_coordinate_three_points(self, line) -> list:
         with open(str(self.main_file), mode='rb') as f:
             f.seek(int(720+(line)*(self.ncell*8+544)+192))
             f_lat = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
