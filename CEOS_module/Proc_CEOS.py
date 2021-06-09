@@ -90,26 +90,17 @@ class Proc_CEOS:
         else:
             return os.path.join(folder, name)
 
-    def get_gcp_three(self) -> list:
-        gcp = []
+    def get_gcp_three(self, line) -> list:
         with open(str(self.main_file), mode='rb') as f:
-            gcp_L = np.linspace(
-                0, self.nline-1, int((self.nline/1000)+1), dtype='int')
-            print(gcp_L)
-            for line in gcp_L:
-                f.seek(int(720+(line)*(self.ncell*8+544)+192))
-                f_lat = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
-                m_lat = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
-                e_lat = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
-                f_lon = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
-                m_lon = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
-                e_lon = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
+            f.seek(int(720+(line)*(self.ncell*8+544)+192))
+            f_lat = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
+            m_lat = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
+            e_lat = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
+            f_lon = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
+            m_lon = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
+            e_lon = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
 
-                gcp.append([f_lon, f_lat, 0.0, float(0), float(line)])
-                gcp.append([m_lon, m_lat, 0.0, float(0), float(line)])
-                gcp.append([e_lon, e_lat, 0.0, float(0), float(line)])
-
-        return gcp
+        return [[f_lon, f_lat], [m_lon, m_lat], [e_lon, e_lat]]
 
     def get_lon_lat(self, pixel, line) -> Tuple[float, float]:
         l_matrix = np.array([line**4, line**3, line**2, line**1, 1])
