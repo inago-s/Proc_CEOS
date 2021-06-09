@@ -80,9 +80,7 @@ class Proc_CEOS:
                 f.seek(1604432+1024)
                 self.coefficient_lat = [float(f.read(20)) for _ in range(25)]
                 self.coefficient_lon = [float(f.read(20)) for _ in range(25)]
-                f.seek(1040)
-                self.origin_lat = float(f.read(20))
-                self.origin_lon = float(f.read(20))
+
         else:
             print('LED file connot be found.')
             exit()
