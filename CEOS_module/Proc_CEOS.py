@@ -1,7 +1,7 @@
 import itertools
 import os
 import struct
-from typing import Tuple
+from typing import NoReturn, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -71,40 +71,7 @@ class Proc_CEOS:
             print('LED file connot be found.')
             exit()
 
-    def _get_file_List(self, Pol):
-        if Pol is not None:
-            file_L = []
-            name_L = []
-
-            Pol_L = Pol.split('+')
-            if 'HH' in Pol_L and self.HH_file is not None:
-                file_L.append(self.HH_file)
-                name_L.append(self.seen_id+'_HH')
-            elif 'HH' in Pol_L and self.HH_file is None:
-                print('HH file is not None')
-            if 'HV' in Pol_L and self.HV_file is not None:
-                file_L.append(self.HV_file)
-                name_L.append(self.seen_id+'_HV')
-            elif 'HV' in Pol_L and self.HV_file is None:
-                print('HV file is not None')
-            if 'VV' in Pol_L and self.VV_file is not None:
-                file_L.append(self.VV_file)
-                name_L.append(self.seen_id+'_VV')
-            elif 'VV' in Pol_L and self.VV_file is None:
-                print('VV file is not None')
-            if 'VH' in Pol_L and self.VH_file is not None:
-                file_L.append(self.VH_file)
-                name_L.append(self.seen_id+'_VH')
-            elif 'VH' in Pol_L and self.VH_file is None:
-                print('VH file is not None')
-        else:
-            file_L = [self.HH_file, self.HV_file, self.VV_file, self.VH_file]
-            name_L = [self.seen_id+'HH', self.seen_id +
-                      'HV', self.seen_id+'VV', self.seen_id+'VH']
-
-        return file_L, name_L
-
-    def get_gcp_three(self):
+    def get_gcp_three(self) -> list:
         gcp = []
         with open(str(self.main_file), mode='rb') as f:
             gcp_L = np.linspace(
@@ -133,7 +100,7 @@ class Proc_CEOS:
 
         return np.dot(self.coefficient_lon, lp_matrix), np.dot(self.coefficient_lat, lp_matrix)
 
-    def make_gcp(self, x, y, w, h, folder):
+    def make_gcp(self, x, y, w, h, folder) -> None:
         with open(os.path.join(folder, self.seen_id)+str(y)+'-'+str(x)+'.points', mode='w') as f:
             s = ""
             for _x, _y in itertools.product(np.linspace(x, x+w, 5).astype('int'), np.linspace(y, y+h, 5).astype('int')):
@@ -143,7 +110,7 @@ class Proc_CEOS:
                     [str(_x), str(_y), str(lon), str(lat)])
             f.write(s)
 
-    def make_intensity_fig(self, Pol_file, x=0, y=0, w=None, h=None, folder=None):
+    def make_intensity_fig(self, Pol_file, x=0, y=0, w=None, h=None, folder=None) -> Tuple[np.ndarray, np.ndarray]:
         if x < 0 or x > self.ncell:
             print('input error')
             exit()
@@ -184,7 +151,7 @@ class Proc_CEOS:
 
         return sigma, phase
 
-    def get_intensity(self, Pol_file, x=0, y=0, w=None, h=None):
+    def get_intensity(self, Pol_file, x=0, y=0, w=None, h=None) -> Tuple[np.ndarray, np.ndarray]:
         if x < 0 or x > self.ncell:
             print('input error')
             exit()
