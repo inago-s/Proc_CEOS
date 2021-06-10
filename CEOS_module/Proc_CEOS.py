@@ -298,6 +298,41 @@ class Proc_CEOS:
 
         return sigma, phase
 
+    def get_slc(self, Pol_file, x=0, y=0, w=None, h=None) -> np.ndarray:
+        if x < 0 or x > self.ncell:
+            print('input error')
+            exit()
+
+        if y < 0 or y > self.nline:
+            print('input error')
+            exit()
+
+        if w is None:
+            w = self.ncell-x
+        elif w > self.ncell-x:
+            print('input error')
+            exit()
+
+        if h is None:
+            h = self.nline-y
+        elif h > self.nline-y:
+            print('input error')
+            exit()
+
+        nrec = 544+self.ncell*8
+
+        with open(Pol_file, mode='rb') as fp:
+            fp.seek(720+int(nrec*y))
+            data = struct.unpack(
+                ">%s" % (int((nrec*h)/4))
+                + "f", fp.read(int(nrec*h)))
+            data = np.array(data).reshape(-1, int(nrec/4))
+            data = data[:, int(544/4):int(nrec/4)]
+            slc = data[:, ::2] + 1j*data[:, 1::2]
+            slc = slc[:, x:x+w]
+
+        return slc
+
     def get_GT(self, lat, lon) -> int:
         filename = os.path.join(self.GT_PATH, 'LC_N' +
                                 str(int(lat))+'E'+str(int(lon))+'.tif')
