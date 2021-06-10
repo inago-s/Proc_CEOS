@@ -1,7 +1,8 @@
 import itertools
 import os
 import struct
-from typing import Tuple, Union
+from typing import Tuple
+import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
@@ -97,6 +98,9 @@ class Proc_CEOS:
         else:
             return os.path.join(folder, name)
 
+    def __normalization(self, x) -> np.ndarray:
+        return (x-np.percentile(x, q=1))/(np.percentile(x, q=99)-np.percentile(x, q=1))
+
     def __set_coordinate_adjust_value(self) -> bool:
         coef_lon, coef_lat = self.__get_lon_lat(0, 0)
         self.origin_lon, self.origin_lat = \
@@ -156,24 +160,6 @@ class Proc_CEOS:
             self.lat_func_y = np.poly1d(coeff)
             return True
 
-    def get_coordinate_three_points(self, line) -> Tuple[list, list, list]:
-        with open(str(self.main_file), mode='rb') as f:
-            f.seek(int(720+(line)*(self.ncell*8+544)+192))
-            f_lat = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
-            m_lat = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
-            e_lat = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
-            f_lon = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
-            m_lon = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
-            e_lon = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
-
-        return [f_lon, f_lat], [m_lon, m_lat], [e_lon, e_lat]
-
-    def get_coordinate(self, pixel, line) -> Tuple[float, float]:
-        if self.coordinate_flag:
-            return self.__get_lon_lat_ajust_value(pixel, line)
-        else:
-            return self.__get_lon_lat(pixel, line)
-
     def __get_lon_lat_ajust_value(self, pixel, line) -> Tuple[float, float]:
         l_matrix = np.array([line**4, line**3, line**2, line**1, 1])
         p_matrix = np.array(
@@ -211,7 +197,7 @@ class Proc_CEOS:
                     [str(_x), str(_y), str(lon), str(lat)])
             f.write(s)
 
-    def save_intensity_OverAllfig(self, Pol_file, folder=None) -> None:
+    def save_intensity_OverAllimg(self, Pol_file, folder=None) -> None:
         img = np.empty((self.nline, self.ncell), dtype='float32')
         for h in range(self.nline):
             img[h], _ = self.get_intensity(
@@ -224,7 +210,7 @@ class Proc_CEOS:
         filename = self.__get_filename(folder, filename)
         plt.imsave(filename, img, cmap='gray')
 
-    def save_intensity_fig(self, Pol_file, x=0, y=0, w=None, h=None, folder=None) -> Tuple[np.ndarray, np.ndarray]:
+    def save_intensity_img(self, Pol_file, x=0, y=0, w=None, h=None, folder=None) -> Tuple[np.ndarray, np.ndarray]:
         if x < 0 or x > self.ncell:
             print('input error')
             exit()
@@ -259,6 +245,51 @@ class Proc_CEOS:
         plt.imsave(filename+'_pahse.png', phase_img, cmap='jet')
 
         return sigma, phase
+
+    def save_GT_img(self, GT, x, y, w, h, folder=None) -> None:
+        GT = np.array(GT)
+        GT = GT.reshape(h, w)
+        GT = np.flipud(GT)
+        GT = np.rot90(GT, -1)
+        GT[GT == 255] = 0
+
+        filename = self.seen_id+'-'+str(y)+'-'+str(x)+'__' + 'GT.png'
+        filename = self.__get_filename(folder, filename)
+
+        if 'ver2103' in self.GT_PATH:
+            plt.imsave(filename, GT,
+                       cmap=self.v2103cmap, vmin=0, vmax=13)
+        elif 'ver1803' in self.GT_PATH:
+            plt.imsave(filename, GT,
+                       cmap=self.v1803cmap, vmin=0, vmax=11)
+        else:
+            if not self.cmap:
+                print('you need set cmap')
+            else:
+                plt.imsave(filename, GT,
+                           cmap=self.cmap, vmin=0, vmax=self.cmap.N)
+
+    def save_Pauli_img(self, x, y, h, w, folder=None) -> None:
+        HH = self.get_slc(self.HH_file, x, y, w, h)
+        HV = self.get_slc(self.HV_file, x, y, w, h)
+        VV = self.get_slc(self.VV_file, x, y, w, h)
+        VH = self.get_slc(self.VH_file, x, y, w, h)
+
+        r = 20*np.log10(abs((HH-VV)/np.sqrt(2)))+self.CF-32.0
+        g = 20*np.log10(abs(np.sqrt(2)*((HV+VH)/2)))+self.CF-32.0
+        b = 20*np.log10(abs((HH+VV)/np.sqrt(2)))+self.CF-32.0
+
+        r = (self.__normalization(r)*255).astype('uint8')
+        g = (self.__normalization(g)*255).astype('uint8')
+        b = (self.__normalization(b)*255).astype('uint8')
+
+        img = np.dstack([cv2.equalizeHist(r),
+                         cv2.equalizeHist(g), cv2.equalizeHist(b)])
+
+        filename = self.seen_id+'-'+str(y)+'-'+str(x)+'__' + 'Pauli.png'
+        filename = self.__get_filename(folder, filename)
+
+        plt.imsave(filename, img)
 
     def get_intensity(self, Pol_file, x=0, y=0, w=None, h=None) -> Tuple[np.ndarray, np.ndarray]:
         if x < 0 or x > self.ncell:
@@ -333,6 +364,24 @@ class Proc_CEOS:
 
         return slc
 
+    def get_coordinate_three_points(self, line) -> Tuple[list, list, list]:
+        with open(str(self.main_file), mode='rb') as f:
+            f.seek(int(720+(line)*(self.ncell*8+544)+192))
+            f_lat = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
+            m_lat = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
+            e_lat = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
+            f_lon = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
+            m_lon = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
+            e_lon = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
+
+        return [f_lon, f_lat], [m_lon, m_lat], [e_lon, e_lat]
+
+    def get_coordinate(self, pixel, line) -> Tuple[float, float]:
+        if self.coordinate_flag:
+            return self.__get_lon_lat_ajust_value(pixel, line)
+        else:
+            return self.__get_lon_lat(pixel, line)
+
     def get_GT(self, lat, lon) -> int:
         filename = os.path.join(self.GT_PATH, 'LC_N' +
                                 str(int(lat))+'E'+str(int(lon))+'.tif')
@@ -346,29 +395,6 @@ class Proc_CEOS:
                            ), int((lon-int(lon))/(1 / w_l))
 
         return self.GT_FILE_LIST[filename][h][w]
-
-    def save_GT_img(self, GT, x, y, w, h, folder=None) -> None:
-        GT = np.array(GT)
-        GT = GT.reshape(h, w)
-        GT = np.flipud(GT)
-        GT = np.rot90(GT, -1)
-        GT[GT == 255] = 0
-
-        filename = self.seen_id+'-'+str(y)+'-'+str(x)+'__' + 'GT.png'
-        filename = self.__get_filename(folder, filename)
-
-        if 'ver2103' in self.GT_PATH:
-            plt.imsave(filename, GT,
-                       cmap=self.v2103cmap, vmin=0, vmax=13)
-        elif 'ver1803' in self.GT_PATH:
-            plt.imsave(filename, GT,
-                       cmap=self.v1803cmap, vmin=0, vmax=11)
-        else:
-            if not self.cmap:
-                print('you need set cmap')
-            else:
-                plt.imsave(filename, GT,
-                           cmap=self.cmap, vmin=0, vmax=self.cmap.N)
 
     def set_cmap(self, colors) -> None:
         self.cmap = ListedColormap(colors, name='custom')
