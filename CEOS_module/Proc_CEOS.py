@@ -10,21 +10,64 @@ from PIL import Image
 
 
 class Proc_CEOS:
+    """
+    ALOS2 CEOS L1.1のデータを処理する．
+
+    Attribute
+    --------
+    folder : str
+        デフォルトのフォルダパス
+    HH_file : str
+        HH偏波SARイメージのファイルパス
+    HV_file : str
+        HV偏波SARイメージのファイルパス
+    VV_file : str
+        VV偏波SARイメージのファイルパス
+    VH_file : str
+        VH偏波SARイメージのファイルパス
+    GT_PATH : str
+        GTのフォルダパス（高解像度土地利用土地被覆図など）
+    GT_IMG_LIST : dic
+        利用したGT画像のキャッシュ
+    cmap : list
+        カスタムのカラーマップ
+    nline : int
+        SARイメージのライン数（高さ）
+    ncell : int
+        SARイメージのピクセル数（幅）
+    LED_file : str
+        SARリーダのファイルパス
+    seen_id : str
+        処理対象データのシーンID
+    coordinate_flag : bool
+        緯度経度変換係数での誤差の有無
+    """
     v21_colors = ['#ffffff', '#000064', '#ff0000', '#0080ff', '#ffc1bf',
                   '#ffff00', '#80ff00', '#00ff80', '#56ac00', '#00ac56',
                   '#806400', '#D9F003', '#A22978']
-    v2103cmap = ListedColormap(v21_colors, name='ver2103')
+    __v2103cmap = ListedColormap(v21_colors, name='ver2103')
     v18_colors = ['#ffffff', '#000064', '#ff0000', '#0080ff', '#ffc1bf',
                   '#ffff00', '#80ff00', '#00ff80', '#56ac00', '#00ac56', '#806400']
-    v1803cmap = ListedColormap(v18_colors, name='ver2803')
+    __v1803cmap = ListedColormap(v18_colors, name='ver2803')
 
     def __init__(self, folder) -> None:
+        """
+        Parameters
+        ----------
+        folder : str
+            処理対象のフォルダパス
+        """
         self.folder = folder
-        self.HH_file = self.HV_file = self.VV_file = self.VH_file \
-            = self.LED_file = self.nline = self.ncell = None
+        self.HH_file = self.HV_file = self.VV_file \
+            = self.VH_file = self.LED_file = None
         self.GT_PATH = ''
-        self.GT_FILE_LIST = {}
+        self.GT_IMG_LIST = {}
         self.cmap = None
+        self.__main_file = ''
+        self.__coefficient_lat = None
+        self.__diff_origin_lon = self.__diff_origin_lat = None
+        self.__lon_func_x = self.__lon_func_y \
+            = self.__lat_func_x = self.__lat_func_y = None
 
         filelist = os.listdir(folder)
 
@@ -46,28 +89,28 @@ class Proc_CEOS:
                 self.nline = int(f.read(8))
                 f.seek(248)
                 self.ncell = int(f.read(8))
-                self.main_file = self.HH_file
+                self.__main_file = self.HH_file
         elif self.HV_file is not None:
             with open(self.HV_file, mode='rb') as f:
                 f.seek(236)
                 self.nline = int(f.read(8))
                 f.seek(248)
                 self.ncell = int(f.read(8))
-                self.main_file = self.HV_file
+                self.__main_file = self.HV_file
         elif self.VV_file is not None:
             with open(self.VV_file, mode='rb') as f:
                 f.seek(236)
                 self.nline = int(f.read(8))
                 f.seek(248)
                 self.ncell = int(f.read(8))
-                self.main_file = self.VV_file
+                self.__main_file = self.VV_file
         elif self.VH_file is not None:
             with open(self.VH_file, mode='rb') as f:
                 f.seek(236)
                 self.nline = int(f.read(8))
                 f.seek(248)
                 self.ncell = int(f.read(8))
-                self.main_file = self.VH_file
+                self.__main_file = self.VH_file
         else:
             print('IMG file connot be found.')
             exit()
@@ -79,16 +122,12 @@ class Proc_CEOS:
                 f.seek(25900)
                 self.CF = float(f.read(16))
                 f.seek(1604432+1024)
-                self.coefficient_lat = [float(f.read(20)) for _ in range(25)]
+                self.__coefficient_lat = [float(f.read(20)) for _ in range(25)]
                 self.coefficient_lon = [float(f.read(20)) for _ in range(25)]
 
         else:
             print('LED file connot be found.')
             exit()
-
-        self.diff_origin_lon = self.diff_origin_lat = None
-        self.lon_func_x = self.lon_func_y \
-            = self.lat_func_x = self.lat_func_y = None
 
         self.coordinate_flag = self.__set_coordinate_adjust_value()
 
@@ -107,8 +146,8 @@ class Proc_CEOS:
             self.get_coordinate_three_points(0)[0]
 
         if (coef_lon-self.origin_lon) < 1.0e-5 and (coef_lat-self.origin_lat) < 1.0e-5:
-            self.lat_func_x = self.lat_func_y = self.lon_func_x \
-                = self.lon_func_y = np.poly1d([0, 0, 0])
+            self.__lat_func_x = self.__lat_func_y = self.__lon_func_x \
+                = self.__lon_func_y = np.poly1d([0, 0, 0])
             return False
         else:
             x = [0, self.ncell/2, self.ncell-1]
@@ -119,7 +158,7 @@ class Proc_CEOS:
                                     for _y, _x in itertools.product(y, x)])
 
             diff = three_lonlat-coef_latlon
-            self.diff_origin_lon, self.diff_origin_lat = diff[0][0], diff[0][1]
+            self.__diff_origin_lon, self.__diff_origin_lat = diff[0][0], diff[0][1]
             f_diff, m_diff, e_diff = diff.reshape(3, 3, 2)
 
             f_diff_lon = f_diff[:, :1]-f_diff[0][0]
@@ -133,11 +172,11 @@ class Proc_CEOS:
 
             diff_ave = np.ravel((f_diff_lon+m_diff_lon+e_diff_lon)/3)
             coeff = np.polyfit(x, diff_ave, 2)
-            self.lon_func_x = np.poly1d(coeff)
+            self.__lon_func_x = np.poly1d(coeff)
 
             diff_ave = np.ravel((f_diff_lat+m_diff_lat+e_diff_lat)/3)
             coeff = np.polyfit(x, diff_ave, 2)
-            self.lat_func_x = np.poly1d(coeff)
+            self.__lat_func_x = np.poly1d(coeff)
 
             f_diff, m_diff, e_diff = diff[::3, ], diff[1::3, ], diff[2::3, ]
 
@@ -153,11 +192,11 @@ class Proc_CEOS:
             diff_ave = np.ravel((f_diff_lat+m_diff_lat+e_diff_lat)/3)
             diff_ave = np.ravel(diff_ave/3)
             coeff = np.polyfit(y, diff_ave, 2)
-            self.lon_func_y = np.poly1d(coeff)
+            self.__lon_func_y = np.poly1d(coeff)
 
             diff_ave = np.ravel((f_diff_lat+m_diff_lat+e_diff_lat)/3)
             coeff = np.polyfit(y, diff_ave, 2)
-            self.lat_func_y = np.poly1d(coeff)
+            self.__lat_func_y = np.poly1d(coeff)
             return True
 
     def __get__coordinate_adjust_value(self, pixel, line) -> Tuple[float, float]:
@@ -166,12 +205,12 @@ class Proc_CEOS:
             [[pixel**4], [pixel**3], [pixel**2], [pixel**1], [1]])
         lp_matrix = np.ravel(l_matrix*p_matrix)
 
-        adjust_lon = self.diff_origin_lon+self.lon_func_x(pixel) +\
-            self.lon_func_y(line)
-        adjust_lat = self.diff_origin_lat+self.lat_func_x(pixel) +\
-            self.lat_func_y(line)
+        adjust_lon = self.__diff_origin_lon+self.__lon_func_x(pixel) +\
+            self.__lon_func_y(line)
+        adjust_lat = self.__diff_origin_lat+self.__lat_func_x(pixel) +\
+            self.__lat_func_y(line)
 
-        return np.dot(self.coefficient_lon, lp_matrix)+adjust_lon, np.dot(self.coefficient_lat, lp_matrix)+adjust_lat
+        return np.dot(self.coefficient_lon, lp_matrix)+adjust_lon, np.dot(self.__coefficient_lat, lp_matrix)+adjust_lat
 
     def __get__coordinate(self, pixel, line) -> Tuple[float, float]:
         l_matrix = np.array([line**4, line**3, line**2, line**1, 1])
@@ -179,13 +218,29 @@ class Proc_CEOS:
             [[pixel**4], [pixel**3], [pixel**2], [pixel**1], [1]])
         lp_matrix = np.ravel(l_matrix*p_matrix)
 
-        return np.dot(self.coefficient_lon, lp_matrix), np.dot(self.coefficient_lat, lp_matrix)
+        return np.dot(self.coefficient_lon, lp_matrix), np.dot(self.__coefficient_lat, lp_matrix)
 
     def save_gcp(self, x, y, w, h, folder=None) -> None:
+        """
+        gdal_translateで利用するgcpオプションをテキスト出力
+
+        Parameters
+        ----------
+        x : int
+            横方向の開始位置
+        y : int
+            縦方向の開始位置
+        w : int
+            幅
+        h : int
+            高さ
+        folder : str
+            保存先フォルダのパス
+        """
         filename = self.seen_id+'-'+str(y)+'-'+str(x)+'.points'
         filepath = self.__make_filepath(folder, filename)
 
-        with open(filename, mode='w') as f:
+        with open(filepath, mode='w') as f:
             s = ""
             x_l = np.linspace(x, x+w, 5, dtype='int')
             y_l = np.linspace(y, y+h, 5, dtype='int')
@@ -198,6 +253,17 @@ class Proc_CEOS:
             f.write(s)
 
     def save_intensity_OverAllimg(self, Pol_file, folder=None) -> None:
+        """
+        全体の強度画像を保存
+
+        Parameters
+        ----------
+        Pol_file : str
+            SARイメージのパス
+        folder : str
+            保存先フォルダのパス
+        """
+
         img = np.empty((self.nline, self.ncell), dtype='float32')
         for h in range(self.nline):
             img[h], _ = self.get_intensity(
@@ -211,6 +277,33 @@ class Proc_CEOS:
         plt.imsave(filepath, img, cmap='gray')
 
     def save_intensity_img(self, Pol_file, x=0, y=0, w=None, h=None, folder=None) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        指定の位置，大きさの強度画像と位相画像を保存．
+        後方散乱強度と位相を出力
+
+        Parameters
+        ----------
+        Pol_file : str
+            SARイメージのパス
+        x : int
+            横方向の開始位置
+        y : int
+            縦方向の開始位置
+        w : int
+            幅
+        h : int
+            高さ
+        folder : str
+            保存先フォルダのパス
+
+        Returns
+        -------
+        sigma : np.ndarray
+            後方散乱強度
+        phase : np.ndarray
+            位相
+        """
+
         if x < 0 or x > self.ncell:
             print('input error')
             exit()
@@ -247,6 +340,24 @@ class Proc_CEOS:
         return sigma, phase
 
     def save_GT_img(self, GT, x, y, w, h, folder=None) -> None:
+        """
+        GT画像の作成
+
+        Parameters
+        ----------
+        GT : list
+            GTデータの配列
+        x : int
+            横方向の開始位置
+        y : int
+            縦方向の開始位置
+        w : int
+            幅
+        h : int
+            高さ
+        folder : str
+            保存先フォルダのパス
+        """
         GT = np.array(GT)
         GT = GT.reshape(h, w)
         GT = np.flipud(GT)
@@ -258,10 +369,10 @@ class Proc_CEOS:
 
         if 'ver2103' in self.GT_PATH:
             plt.imsave(filepath, GT,
-                       cmap=self.v2103cmap, vmin=0, vmax=13)
+                       cmap=self.__v2103cmap, vmin=0, vmax=13)
         elif 'ver1803' in self.GT_PATH:
             plt.imsave(filepath, GT,
-                       cmap=self.v1803cmap, vmin=0, vmax=11)
+                       cmap=self.__v1803cmap, vmin=0, vmax=11)
         else:
             if not self.cmap:
                 print('you need set cmap')
@@ -269,7 +380,23 @@ class Proc_CEOS:
                 plt.imsave(filepath, GT,
                            cmap=self.cmap, vmin=0, vmax=self.cmap.N)
 
-    def save_Pauli_img(self, x, y, h, w, folder=None) -> None:
+    def save_Pauli_img(self, x, y, w, h, folder=None) -> None:
+        """
+        Pauli分解画像の保存
+
+        Parameters
+        ----------
+        x : int
+            横方向の開始位置
+        y : int
+            縦方向の開始位置
+        w : int
+            幅
+        h : int
+            高さ
+        folder : str
+            保存先フォルダのパス
+        """
         HH = self.get_slc(self.HH_file, x, y, w, h)
         HV = self.get_slc(self.HV_file, x, y, w, h)
         VV = self.get_slc(self.VV_file, x, y, w, h)
@@ -291,7 +418,30 @@ class Proc_CEOS:
 
         plt.imsave(filepath, img)
 
-    def get_intensity(self, Pol_file, x=0, y=0, w=None, h=None) -> Tuple[np.ndarray, np.ndarray]:
+    def get_intensity(self, Pol_file, x, y, w, h) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        後方散乱強度と位相を出力
+
+        Parameters
+        ----------
+        Pol_file : str
+            SARイメージのパス
+        x : int
+            横方向の開始位置
+        y : int
+            縦方向の開始位置
+        w : int
+            幅
+        h : int
+            高さ
+
+        Returns
+        -------
+        sigma : np.ndarray
+            後方散乱強度
+        phase : np.ndarray
+            位相
+        """
         if x < 0 or x > self.ncell:
             print('input error')
             exit()
@@ -329,7 +479,28 @@ class Proc_CEOS:
 
         return sigma, phase
 
-    def get_slc(self, Pol_file, x=0, y=0, w=None, h=None) -> np.ndarray:
+    def get_slc(self, Pol_file, x, y, w, h) -> np.ndarray:
+        """
+        シグナルデータの取得
+
+        Parameters
+        ----------
+        Pol_file : str
+            SARイメージのパス
+        x : int
+            横方向の開始位置
+        y : int
+            縦方向の開始位置
+        w : int
+            幅
+        h : int
+            高さ
+
+        Returns
+        -------
+        slc : np.ndarray
+            シグナルデータ（複素数）
+        """
         if x < 0 or x > self.ncell:
             print('input error')
             exit()
@@ -365,7 +536,24 @@ class Proc_CEOS:
         return slc
 
     def get_coordinate_three_points(self, line) -> Tuple[list, list, list]:
-        with open(str(self.main_file), mode='rb') as f:
+        """
+        指定のライン（高さ）の最初，中央，最後のピクセルの緯度経度の出力
+
+        Parameters
+        ----------
+        line : int
+            縦方向の位置
+
+        Returns
+        -------
+        [f_lon, f_lat]: list
+            最初のピクセルの緯度経度
+        [m_lon, m_lat]: list
+            中央のピクセルの緯度経度
+        [e_lon, e_lat]: list
+            最後のピクセルの緯度経度
+        """
+        with open(str(self.__main_file), mode='rb') as f:
             f.seek(int(720+(line)*(self.ncell*8+544)+192))
             f_lat = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
             m_lat = float(struct.unpack(">%s" % "i", f.read(4))[0])/1000000
@@ -377,24 +565,64 @@ class Proc_CEOS:
         return [f_lon, f_lat], [m_lon, m_lat], [e_lon, e_lat]
 
     def get_coordinate(self, pixel, line) -> Tuple[float, float]:
+        """
+        指定の位置の緯度経度の出力
+
+        Parameters
+        ----------
+        pixel : int
+            横方向の位置
+        line : int
+            縦方向の位置
+
+        Returns
+        -------
+        lon : float
+            経度
+        lat : float
+            緯度
+        """
         if self.coordinate_flag:
             return self.__get__coordinate_adjust_value(pixel, line)
         else:
             return self.__get__coordinate(pixel, line)
 
     def get_GT(self, lat, lon) -> int:
-        filename = os.path.join(self.GT_PATH, 'LC_N' +
-                                str(int(lat))+'E'+str(int(lon))+'.tif')
-        if filename not in self.GT_FILE_LIST.keys():
-            img = Image.open(filename)
-            self.GT_FILE_LIST[filename] = np.array(img)
+        """
+        指定の位置のGTデータの取得
 
-        h_l, w_l = self.GT_FILE_LIST[filename].shape
+        Parameters
+        ----------
+        lat : float
+            緯度
+        lon : float
+            経度
+
+        Returns
+        -------
+        GT : int
+            GTのクラス
+        """
+        filepath = os.path.join(self.GT_PATH, 'LC_N' +
+                                str(int(lat))+'E'+str(int(lon))+'.tif')
+        if filepath not in self.GT_IMG_LIST.keys():
+            img = Image.open(filepath)
+            self.GT_IMG_LIST[filepath] = np.array(img)
+
+        h_l, w_l = self.GT_IMG_LIST[filepath].shape
 
         h, w = (h_l-1)-int((lat-int(lat))/(1 / h_l)
                            ), int((lon-int(lon))/(1 / w_l))
 
-        return self.GT_FILE_LIST[filename][h][w]
+        return self.GT_IMG_LIST[filepath][h][w]
 
     def set_cmap(self, colors) -> None:
+        """
+        カスタムのカラーマップの設定
+
+        Parameters
+        ----------
+        colors : list
+        色の配列
+        """
         self.cmap = ListedColormap(colors, name='custom')
