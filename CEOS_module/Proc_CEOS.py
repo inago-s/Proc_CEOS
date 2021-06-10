@@ -11,36 +11,7 @@ from PIL import Image
 
 class Proc_CEOS:
     """
-    ALOS2 CEOS L1.1のデータを処理する．
-
-    Attribute
-    --------
-    folder : str
-        デフォルトのフォルダパス
-    HH_file : str
-        HH偏波SARイメージのファイルパス
-    HV_file : str
-        HV偏波SARイメージのファイルパス
-    VV_file : str
-        VV偏波SARイメージのファイルパス
-    VH_file : str
-        VH偏波SARイメージのファイルパス
-    GT_PATH : str
-        GTのフォルダパス（高解像度土地利用土地被覆図など）
-    GT_IMG_LIST : dic
-        利用したGT画像のキャッシュ
-    cmap : list
-        カスタムのカラーマップ
-    nline : int
-        SARイメージのライン数（高さ）
-    ncell : int
-        SARイメージのピクセル数（幅）
-    LED_file : str
-        SARリーダのファイルパス
-    seen_id : str
-        処理対象データのシーンID
-    coordinate_flag : bool
-        緯度経度変換係数での誤差の有無
+    ALOS2 CEOS L1.1のデータを処理する． 
     """
     v21_colors = ['#ffffff', '#000064', '#ff0000', '#0080ff', '#ffc1bf',
                   '#ffff00', '#80ff00', '#00ff80', '#56ac00', '#00ac56',
@@ -56,6 +27,39 @@ class Proc_CEOS:
         ----------
         folder : str
             処理対象のフォルダパス
+
+        Attributes
+        --------
+        folder : str
+            デフォルトのフォルダパス
+        HH_file : str
+            HH偏波SARイメージのファイルパス
+        HV_file : str
+            HV偏波SARイメージのファイルパス
+        VV_file : str
+            VV偏波SARイメージのファイルパス
+        VH_file : str
+            VH偏波SARイメージのファイルパス
+        GT_PATH : str
+            GTのフォルダパス（高解像度土地利用土地被覆図など）
+        GT_IMG_LIST : dic
+            利用したGT画像のキャッシュ
+        cmap : list
+            カスタムのカラーマップ
+        nline : int
+            SARイメージのライン数（高さ）
+        ncell : int
+            SARイメージのピクセル数（幅）
+        LED_file : str
+            SARリーダのファイルパス
+        seen_id : str
+            処理対象データのシーンID
+        coordinate_flag : bool
+            緯度経度変換係数での誤差の有無
+        v21_colors : list
+            高解像度土地利用土地被覆図ver21のカラーリスト
+        v18_colors : list
+            高解像度土地利用土地被覆図ver18のカラーリスト
         """
         self.folder = folder
         self.HH_file = self.HV_file = self.VV_file \
