@@ -7,6 +7,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 from PIL import Image
+from scipy.ndimage.filters import uniform_filter
+from scipy.ndimage.measurements import variance
 
 
 class Proc_CEOS:
@@ -143,6 +145,18 @@ class Proc_CEOS:
 
     def __normalization(self, x) -> np.ndarray:
         return (x-np.percentile(x, q=1))/(np.percentile(x, q=99)-np.percentile(x, q=1))
+
+    def __leefilter(self, img, size) -> np.ndarray:
+        img_mean = uniform_filter(img, (size, size))
+        img_sqr_mean = uniform_filter(img**2, (size, size))
+        img_variance = img_sqr_mean - img_mean**2
+
+        overall_variance = variance(img)
+
+        img_weights = img_variance / (img_variance + overall_variance)
+        img_output = img_mean + img_weights * (img - img_mean)
+
+        return img_output
 
     def __set_coordinate_adjust_value(self) -> bool:
         coef_lon, coef_lat = self.__get__coordinate(0, 0)
@@ -331,8 +345,11 @@ class Proc_CEOS:
         sigma, phase = self.get_intensity(Pol_file, x, y, w, h)
         sigma_img = np.array(255*(sigma-np.amin(sigma)) /
                              (np.amax(sigma)-np.amin(sigma)), dtype="uint8")
+        sigma_img = self.__leefilter(sigma_img, 3)
         phase_img = np.array(255*(phase - np.amin(phase)) /
                              (np.amax(phase) - np.amin(phase)), dtype="uint8")
+        phase_img = self.__leefilter(phase_img, 3)
+
         filename = str(self.seen_id)+'-' + str(y)+'-' + \
             str(x)+'__'+Pol_file.split('-')[2]
 
