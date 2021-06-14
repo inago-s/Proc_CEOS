@@ -345,10 +345,10 @@ class Proc_CEOS:
         sigma, phase = self.get_intensity(Pol_file, x, y, w, h)
         sigma_img = np.array(255*(sigma-np.amin(sigma)) /
                              (np.amax(sigma)-np.amin(sigma)), dtype="uint8")
-        sigma_img = self.__leefilter(sigma_img, 3)
+        sigma_img = self.__leefilter(sigma_img, 9)
         phase_img = np.array(255*(phase - np.amin(phase)) /
                              (np.amax(phase) - np.amin(phase)), dtype="uint8")
-        phase_img = self.__leefilter(phase_img, 3)
+        phase_img = self.__leefilter(phase_img, 9)
 
         filename = str(self.seen_id)+'-' + str(y)+'-' + \
             str(x)+'__'+Pol_file.split('-')[2]
