@@ -254,6 +254,8 @@ class Proc_CEOS:
             高さ
         folder : str
             保存先フォルダのパス
+        filename : str
+            保存データのファイル名
         """
 
         if not filename:
@@ -282,6 +284,8 @@ class Proc_CEOS:
             SARイメージのパス
         folder : str
             保存先フォルダのパス
+        filename : str
+            保存データのファイル名
         """
 
         img = np.empty((self.nline, self.ncell), dtype='float32')
@@ -317,6 +321,8 @@ class Proc_CEOS:
             高さ
         folder : str
             保存先フォルダのパス
+        filename : str
+            保存データのファイル名
 
         Returns
         -------
@@ -382,6 +388,8 @@ class Proc_CEOS:
             高さ
         folder : str
             保存先フォルダのパス
+        filename : str
+            保存データのファイル名
         """
         GT = np.array(GT)
         GT = GT.reshape(h, w)
@@ -422,6 +430,8 @@ class Proc_CEOS:
             高さ
         folder : str
             保存先フォルダのパス
+        filename : str
+            保存データのファイル名
         """
         HH = self.get_slc(self.HH_file, x, y, w, h)
         HV = self.get_slc(self.HV_file, x, y, w, h)
