@@ -3,6 +3,7 @@
 *.jpeg
 *.jpg
 *.points
+*.pkl
 .vscode
 test.py
 __pycache__
