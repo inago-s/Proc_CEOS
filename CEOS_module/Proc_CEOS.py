@@ -556,6 +556,36 @@ class Proc_CEOS:
 
         return slc
 
+    def get_Pauli(self, x, y, w, h) -> np.ndarray:
+        """
+        Pauli分解画像の保存
+
+        Parameters
+        ----------
+        x : int
+            横方向の開始位置
+        y : int
+            縦方向の開始位置
+        w : int
+            幅
+        h : int
+            高さ
+        """
+        HH = self.get_slc(self.HH_file, x, y, w, h)
+        HV = self.get_slc(self.HV_file, x, y, w, h)
+        VV = self.get_slc(self.VV_file, x, y, w, h)
+        VH = self.get_slc(self.VH_file, x, y, w, h)
+
+        r = 20*np.log10(abs((HH-VV)/np.sqrt(2)))+self.CF-32.0
+        g = 20*np.log10(abs(np.sqrt(2)*((HV+VH)/2)))+self.CF-32.0
+        b = 20*np.log10(abs((HH+VV)/np.sqrt(2)))+self.CF-32.0
+
+        r = (self.__normalization(r)*255).astype('uint8')
+        g = (self.__normalization(g)*255).astype('uint8')
+        b = (self.__normalization(b)*255).astype('uint8')
+
+        return r, g, b
+
     def get_coordinate_three_points(self, line) -> Tuple[list, list, list]:
         """
         指定のライン（高さ）の最初，中央，最後のピクセルの緯度経度の出力
@@ -647,3 +677,14 @@ class Proc_CEOS:
         色の配列
         """
         self.cmap = ListedColormap(colors, name='custom')
+
+    def set_GT(self, folder) -> None:
+        """
+        GTフォルダの設定
+
+        Parameters
+        ----------
+        folder : str
+        GTフォルダのパス
+        """
+        self.GT_PATH = folder
