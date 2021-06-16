@@ -238,7 +238,7 @@ class Proc_CEOS:
 
         return np.dot(self.coefficient_lon, lp_matrix), np.dot(self.__coefficient_lat, lp_matrix)
 
-    def save_gcp(self, x, y, w, h, folder=None) -> None:
+    def save_gcp(self, x, y, w, h, folder=None, filename=None) -> None:
         """
         gdal_translateで利用するgcpオプションをテキスト出力
 
@@ -255,7 +255,9 @@ class Proc_CEOS:
         folder : str
             保存先フォルダのパス
         """
-        filename = self.seen_id+'-'+str(y)+'-'+str(x)+'.points'
+
+        if not filename:
+            filename = self.seen_id+'-'+str(y)+'-'+str(x)+'.points'
         filepath = self.__make_filepath(folder, filename)
 
         with open(filepath, mode='w') as f:
@@ -270,7 +272,7 @@ class Proc_CEOS:
                     [str(_x), str(_y), str(lon), str(lat)])
             f.write(s)
 
-    def save_intensity_OverAllimg(self, Pol_file, folder=None) -> None:
+    def save_intensity_OverAllimg(self, Pol_file, folder=None, filename=None) -> None:
         """
         全体の強度画像を保存
 
@@ -290,11 +292,13 @@ class Proc_CEOS:
         img = np.array(255*(img-np.amin(img)) /
                        (np.amax(img)-np.amin(img)), dtype="uint8")
 
-        filename = str(self.seen_id)+'.png'
+        if not filename:
+            filename = str(self.seen_id)+'.png'
         filepath = self.__make_filepath(folder, filename)
+
         plt.imsave(filepath, img, cmap='gray')
 
-    def save_intensity_img(self, Pol_file, x=0, y=0, w=None, h=None, folder=None) -> Tuple[np.ndarray, np.ndarray]:
+    def save_intensity_img(self, Pol_file, x=0, y=0, w=None, h=None, folder=None, filename=None) -> Tuple[np.ndarray, np.ndarray]:
         """
         指定の位置，大きさの強度画像と位相画像を保存．
         後方散乱強度と位相を出力
@@ -350,9 +354,9 @@ class Proc_CEOS:
                              (np.amax(phase) - np.amin(phase)), dtype="uint8")
         phase_img = self.__leefilter(phase_img, 9)
 
-        filename = str(self.seen_id)+'-' + str(y)+'-' + \
-            str(x)+'__'+Pol_file.split('-')[2]
-
+        if not filename:
+            filename = str(self.seen_id)+'-' + str(y)+'-' + \
+                str(x)+'__'+Pol_file.split('-')[2]
         filepath = self.__make_filepath(folder, filename)
 
         plt.imsave(filepath+'_sigma.png', sigma_img, cmap='gray')
@@ -360,7 +364,7 @@ class Proc_CEOS:
 
         return sigma, phase
 
-    def save_GT_img(self, GT, x, y, w, h, folder=None) -> None:
+    def save_GT_img(self, GT, x, y, w, h, folder=None, filename=None) -> None:
         """
         GT画像の作成
 
@@ -385,7 +389,8 @@ class Proc_CEOS:
         GT = np.rot90(GT, -1)
         GT[GT == 255] = 0
 
-        filename = self.seen_id+'-'+str(y)+'-'+str(x)+'__' + 'GT.png'
+        if not filename:
+            filename = self.seen_id+'-'+str(y)+'-'+str(x)+'__' + 'GT.png'
         filepath = self.__make_filepath(folder, filename)
 
         if 'ver2103' in self.GT_PATH:
@@ -401,7 +406,7 @@ class Proc_CEOS:
                 plt.imsave(filepath, GT,
                            cmap=self.cmap, vmin=0, vmax=self.cmap.N)
 
-    def save_Pauli_img(self, x, y, w, h, folder=None) -> None:
+    def save_Pauli_img(self, x, y, w, h, folder=None, filename=None) -> None:
         """
         Pauli分解画像の保存
 
@@ -434,7 +439,8 @@ class Proc_CEOS:
         img = np.dstack([cv2.equalizeHist(r),
                          cv2.equalizeHist(g), cv2.equalizeHist(b)])
 
-        filename = self.seen_id+'-'+str(y)+'-'+str(x)+'__' + 'Pauli.png'
+        if not filename:
+            filename = self.seen_id+'-'+str(y)+'-'+str(x)+'__' + 'Pauli.png'
         filepath = self.__make_filepath(folder, filename)
 
         plt.imsave(filepath, img)
