@@ -20,3 +20,4 @@ test*
 *.sh
 sar2intensity.py
 fit_model.py
+dataset/
