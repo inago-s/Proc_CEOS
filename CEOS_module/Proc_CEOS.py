@@ -144,7 +144,9 @@ class Proc_CEOS:
             return os.path.join(folder, name)
 
     def __normalization(self, x) -> np.ndarray:
-        return (x-np.percentile(x, q=1))/(np.percentile(x, q=99)-np.percentile(x, q=1))
+        x = (x-np.percentile(x, q=1)) / \
+            (np.percentile(x, q=99)-np.percentile(x, q=1))
+        return np.clip(x, 0, 1)
 
     def __leefilter(self, img, size) -> np.ndarray:
         img_mean = uniform_filter(img, (size, size))
