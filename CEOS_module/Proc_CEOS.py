@@ -457,6 +457,97 @@ class Proc_CEOS:
 
         plt.imsave(filepath, img)
 
+    def save_coherency_img(self, x, y, w, h, folder=None, filename=None) -> None:
+        HH = self.get_slc(self.HH_file, x, y, w, h)
+        HV = self.get_slc(self.HV_file, x, y, w, h)
+        VV = self.get_slc(self.VV_file, x, y, w, h)
+        VH = self.get_slc(self.VH_file, x, y, w, h)
+        HV = (VH+HV)/2
+
+        double = np.zeros((h, w))
+        surface = np.zeros((h, w))
+        vol = np.zeros((h, w))
+        helix = np.zeros((h, w))
+
+        for x, y in itertools.product(range(w), range(h)):
+            _HH = HH[y, x]
+            _VV = VV[y, x]
+            _HV = HV[y, x]
+            Pc = 2*np.abs(((_HV.conjugate())*(_HH-_VV)).imag)
+            if 10*np.log10((np.abs(_VV)**2)/(np.abs(_HH)**2)) < -2:
+                Pv = (15/2)*(np.abs(_HV)**2)-(15/8)*Pc
+                if Pv < 0:
+                    Pc = 0
+                    Pd = (15/2)*(np.abs(_HV)**2)-(15/8)*Pc
+                S = (1/2)*(np.abs(_HH+_VV)**2)-(Pv/2)
+                D = (1/2)*(np.abs(_HH-_VV)**2)-(7/4)*(np.abs(_HV)**2)-(Pc/16)
+                C = (1/2)*((_HH+_VV)*((_HH-_VV).conjugate()))-(Pv/6)
+            elif 10*np.log10((np.abs(_VV)**2)/(np.abs(_HH)**2)) > 2:
+                Pv = (15/2)*(np.abs(_HV)**2)-(15/8)*Pc
+                if Pv < 0:
+                    Pc = 0
+                    Pv = (15/2)*(np.abs(_HV)**2)-(15/8)*Pc
+                S = (1/2)*(np.abs(_HH+_VV)**2)-(Pv/2)
+                D = (1/2)*(np.abs(_HH-_VV)**2)-(7/4)*(np.abs(_HV)**2)-(Pc/16)
+                C = (1/2)*((_HH+_VV)*((_HH-_VV).conjugate()))+(Pv/6)
+            else:
+                Pv = 8*(np.abs(_HV)**2)-2*Pc
+                if Pv < 0:
+                    Pc = 0
+                    Pv = 8*(np.abs(_HV)**2)-2*Pc
+                S = (1/2)*(np.abs(_HH+_VV)**2)-4*(np.abs(_HV)**2)+Pc
+                D = (1/2)*(np.abs(_HH-_VV)**2)-2*(np.abs(_HV)**2)
+                C = (1/2)*((_HH+_VV)*((_HH-_VV).conjugate()))
+            TP = np.abs(_HH)**2+np.abs(_VV)**2+np.abs(_HV)
+
+            if Pv < TP or Pv < TP:
+                C0 = _HH*(_VV.conjugate())-np.abs(_HV)**2+Pc/2
+                if C0.real > 0:
+                    Ps = S+np.abs(C)**2/S
+                    Pd = D-np.abs(C)**2/S
+                else:
+                    Ps = S-np.abs(C)**2/D
+                    Pd = D+np.abs(C)**2/D
+                if Ps > 0 and Pd < 0:
+                    Ps = TP-Pv-Pc
+                    Pd = 0
+                elif Ps < 0 and Pd > 0:
+                    Pd = TP-Pv-Pc
+                    Ps = 0
+            else:
+                Ps = Pd = 0
+                Pv = TP-Pc
+
+            double[y, x] = Pd
+            surface[y, x] = Ps
+            vol[y, x] = Pv
+            helix[y, x] = Pc
+
+        surface[surface == 0] = 1
+        double[double == 0] = 1
+        helix[helix == 0] = 1
+        sigma = 10*np.log10(abs(surface))-self.CF-32
+        sigma = (self.__normalization(sigma)*255).astype('uint8')
+        fs = self.__leefilter(cv2.equalizeHist(sigma), 9).astype('uint8')
+
+        sigma = (10*np.log10(abs(double))-self.CF-32) + \
+            (10*np.log10(abs(helix))-self.CF-32)/2
+        sigma = (self.__normalization(sigma)*255).astype('uint8')
+        fd = self.__leefilter(cv2.equalizeHist(sigma), 9).astype('uint8')
+
+        sigma = (10*np.log10(abs(vol))-self.CF-32) + \
+            (10*np.log10(abs(helix))-self.CF-32)/2
+        sigma = (self.__normalization(sigma)*255).astype('uint8')
+        fv = self.__leefilter(cv2.equalizeHist(sigma), 9).astype('uint8')
+
+        if not filename:
+            filename = self.seen_id+'-'+str(y)+'-'+str(x)+'__' + 'Pauli.png'
+        filepath = self.__make_filepath(folder, filename)
+
+        img = np.dstack((fd, fv, fs))
+
+        plt.imsave(filepath, img)
+
     def get_intensity(self, Pol_file, x, y, w, h) -> Tuple[np.ndarray, np.ndarray]:
         """
         後方散乱強度と位相を出力
