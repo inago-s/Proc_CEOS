@@ -129,7 +129,9 @@ class Proc_CEOS:
                 self.CF = float(f.read(16))
                 f.seek(1604432+1024)
                 self.__coefficient_lat = [float(f.read(20)) for _ in range(25)]
-                self.coefficient_lon = [float(f.read(20)) for _ in range(25)]
+                self.__coefficient_lon = [float(f.read(20)) for _ in range(25)]
+                self.__P0 = float(f.read(20))
+                self.__L0 = float(f.read(20))
 
         else:
             print('LED file connot be found.')
@@ -161,7 +163,7 @@ class Proc_CEOS:
         return img_output
 
     def __set_coordinate_adjust_value(self) -> bool:
-        coef_lon, coef_lat = self.__get__coordinate(0, 0)
+        coef_lon, coef_lat = self.__get_coordinate(0, 0)
         self.origin_lon, self.origin_lat = \
             self.get_coordinate_three_points(0)[0]
 
@@ -174,7 +176,7 @@ class Proc_CEOS:
             y = [0, int(self.nline/2), self.nline-1]
             three_lonlat = np.array(
                 [self.get_coordinate_three_points(_y) for _y in y]).reshape(9, 2)
-            coef_latlon = np.array([self.__get__coordinate(_x, _y)
+            coef_latlon = np.array([self.__get_coordinate(_x, _y)
                                     for _y, _x in itertools.product(y, x)])
 
             diff = three_lonlat-coef_latlon
@@ -219,7 +221,7 @@ class Proc_CEOS:
             self.__lat_func_y = np.poly1d(coeff)
             return True
 
-    def __get__coordinate_adjust_value(self, pixel, line) -> Tuple[float, float]:
+    def __get_coordinate_adjust_value(self, pixel, line) -> Tuple[float, float]:
         l_matrix = np.array([line**4, line**3, line**2, line**1, 1])
         p_matrix = np.array(
             [[pixel**4], [pixel**3], [pixel**2], [pixel**1], [1]])
@@ -230,15 +232,17 @@ class Proc_CEOS:
         adjust_lat = self.__diff_origin_lat+self.__lat_func_x(pixel) +\
             self.__lat_func_y(line)
 
-        return np.dot(self.coefficient_lon, lp_matrix)+adjust_lon, np.dot(self.__coefficient_lat, lp_matrix)+adjust_lat
+        return np.dot(self.__coefficient_lon, lp_matrix)+adjust_lon, np.dot(self.__coefficient_lat, lp_matrix)+adjust_lat
 
-    def __get__coordinate(self, pixel, line) -> Tuple[float, float]:
+    def __get_coordinate(self, pixel, line) -> Tuple[float, float]:
+        pixel = pixel-self.__P0
+        line = line-self.__L0
         l_matrix = np.array([line**4, line**3, line**2, line**1, 1])
         p_matrix = np.array(
             [[pixel**4], [pixel**3], [pixel**2], [pixel**1], [1]])
         lp_matrix = np.ravel(l_matrix*p_matrix)
 
-        return np.dot(self.coefficient_lon, lp_matrix), np.dot(self.__coefficient_lat, lp_matrix)
+        return np.dot(self.__coefficient_lon, lp_matrix), np.dot(self.__coefficient_lat, lp_matrix)
 
     def save_gcp(self, x, y, w, h, folder=None, filename=None) -> None:
         """
@@ -743,9 +747,9 @@ class Proc_CEOS:
             緯度
         """
         if self.coordinate_flag:
-            return self.__get__coordinate_adjust_value(pixel, line)
+            return self.__get_coordinate_adjust_value(pixel, line)
         else:
-            return self.__get__coordinate(pixel, line)
+            return self.__get_coordinate(pixel, line)
 
     def get_GT(self, lat, lon) -> int:
         """
