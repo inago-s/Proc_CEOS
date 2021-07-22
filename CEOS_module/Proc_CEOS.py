@@ -338,6 +338,19 @@ class Proc_CEOS:
                 plt.imsave(filepath, GT,
                            cmap=self.cmap, vmin=0, vmax=self.cmap.N)
 
+    def save_DEM_img(self, DEM, x, y, w, h, folder=None, filename=None) -> None:
+        """
+        """
+        DEM = np.array(DEM)
+        DEM = DEM.reshape(h, w)
+        DEM = np.flipud(DEM)
+        DEM = np.roll(DEM, -1)
+
+        if not filename:
+            filename = self.seen_id+'-'+str(y)+'-'+str(x)+'__' + 'GT.png'
+        filepath = self.__make_filepath(folder, filename)
+        plt.imsave(filepath, DEM, cmap='jet')
+
     def save_Pauli_img(self, x, y, w, h, folder=None, filename=None) -> None:
         """
         Pauli分解画像の保存
