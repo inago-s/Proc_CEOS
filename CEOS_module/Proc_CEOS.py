@@ -67,7 +67,9 @@ class Proc_CEOS:
         self.HH_file = self.HV_file = self.VV_file \
             = self.VH_file = self.LED_file = None
         self.GT_PATH = ''
+        self.DEM_PATH = ''
         self.GT_IMG_LIST = {}
+        self.DEM_IMG_LIST = {}
         self.cmap = None
         self.__main_file = ''
         self.__coefficient_lat = None
@@ -616,6 +618,21 @@ class Proc_CEOS:
         return r, g, b
 
     def get_coordinate(self, pixel, line) -> Tuple[float, float]:
+        """
+        指定の位置の緯度経度の出力
+        Parameters
+        ----------
+        pixel : int
+            横方向の位置
+        line : int
+            縦方向の位置
+        Returns
+        -------
+        lon : float
+            経度
+        lat : float
+            緯度
+        """
         pixel = pixel-self.__P0
         line = line-self.__L0
         l_matrix = np.array([line**4, line**3, line**2, line**1, 1])
@@ -654,7 +671,7 @@ class Proc_CEOS:
 
         return [f_lon, f_lat], [m_lon, m_lat], [e_lon, e_lat]
 
-    def get_GT(self, lat, lon) -> int:
+    def get_GT(self, lon, lat) -> int:
         """
         指定の位置のGTデータの取得
 
@@ -683,6 +700,21 @@ class Proc_CEOS:
 
         return self.GT_IMG_LIST[filepath][h][w]
 
+    def get_DEM(self, lon, lat) -> int:
+        filepath = os.path.join(self.DEM_PATH, 'ALPSMLC30_N' +
+                                str(int(lat)).zfill(3)+'E'+str(int(lon)).zfill(3)+'_DSM.tif')
+
+        if filepath not in self.DEM_IMG_LIST.keys():
+            img = Image.open(filepath)
+            self.DEM_IMG_LIST[filepath] = np.array(img)
+
+        h_l, w_l = self.DEM_IMG_LIST[filepath].shape
+
+        h, w = (h_l-1)-int((lat-int(lat))/(1 / h_l)
+                           ), int((lon-int(lon))/(1 / w_l))
+
+        return self.DEM_IMG_LIST[filepath][h][w]
+
     def set_cmap(self, colors) -> None:
         """
         カスタムのカラーマップの設定
@@ -704,3 +736,14 @@ class Proc_CEOS:
         GTフォルダのパス
         """
         self.GT_PATH = folder
+
+    def set_DEM(self, folder) -> None:
+        """
+        DEMフォルダの設定
+
+        Parameters
+        ----------
+        folder : str
+        DEMフォルダのパス
+        """
+        self.DEM_PATH = folder
