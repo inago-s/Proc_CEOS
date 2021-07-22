@@ -7,3 +7,12 @@
     - 緯度，経度の計算
     - JAXA提供の土地被覆図からGT画像の作成
     - Pauli分解画像の作成
+
+# 必要パッケージ
+- Python
+    - opencv-python
+    - scipy
+    - numpy
+    - joblib
+    - matplotlib
+    - Pillow

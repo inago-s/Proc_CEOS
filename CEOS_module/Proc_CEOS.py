@@ -344,7 +344,7 @@ class Proc_CEOS:
         DEM = np.array(DEM)
         DEM = DEM.reshape(h, w)
         DEM = np.flipud(DEM)
-        DEM = np.roll(DEM, -1)
+        DEM = np.rot90(DEM, -1)
 
         if not filename:
             filename = self.seen_id+'-'+str(y)+'-'+str(x)+'__' + 'GT.png'
