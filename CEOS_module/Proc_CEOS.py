@@ -9,6 +9,7 @@ from matplotlib.colors import ListedColormap
 from PIL import Image
 from scipy.ndimage.filters import uniform_filter
 from scipy.ndimage.measurements import variance
+import pyproj
 
 
 class Proc_CEOS:
@@ -161,6 +162,55 @@ class Proc_CEOS:
         img_output = img_mean + img_weights * (img - img_mean)
 
         return img_output
+
+    def __get_sat_pos(self, y, h):
+        led = open(self.LED_file, mode='rb')
+        img = open(self.__main_file, mode='rb')
+        img.seek(720+44)
+        time_start = struct.unpack(">i", img.read(4))[0]/1000
+        led.seek(720+500)
+
+        led.seek(720+4096+140)
+        position_num = int(led.read(4))
+        led.seek(720+4096+182)
+        time_interval = int(float(led.read(22)))
+
+        led.seek(720+4096+160)
+        start_time = float(led.read(22))
+
+        led.seek(720+68)
+        center_time = led.read(32)
+        Hr = float(center_time[8:10])*3600
+        Min = float(center_time[10:12])*60
+        Sec = float(center_time[12:14])
+        msec = float(center_time[14:17])*1e-3
+        center_time = Hr+Min+Sec+msec
+        time_end = time_start + (center_time - time_start)*2
+
+        img.seek(236)
+        nline = int(img.read(8))
+        time_obs = np.arange(time_start, time_end, (time_end - time_start)/nline)
+        time_pos = np.arange(start_time, start_time +
+                            time_interval*position_num, time_interval)
+        pos_ary = []
+
+        led.seek(720+4096+386)
+        for _ in range(position_num):
+            for _ in range(3):
+                pos = float(led.read(22))
+                pos_ary.append(pos)
+            led.read(66)
+        pos_ary = np.array(pos_ary).reshape(-1, 3)
+
+        fx = interpolate.interp1d(time_pos, pos_ary[:, 0], kind="cubic")
+        fy = interpolate.interp1d(time_pos, pos_ary[:, 1], kind="cubic")
+        fz = interpolate.interp1d(time_pos, pos_ary[:, 2], kind="cubic")
+        X = fx(time_obs)
+        Y = fy(time_obs)
+        Z = fz(time_obs)
+        pos = np.dstack((X, Y, Z))
+
+        return pos[0][y:y+h, :]
 
     def save_gcp(self, x, y, w, h, folder=None, filename=None) -> None:
         """
