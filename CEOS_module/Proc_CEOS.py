@@ -9,6 +9,7 @@ from matplotlib.colors import ListedColormap
 from PIL import Image
 from scipy.ndimage.filters import uniform_filter
 from scipy.ndimage.measurements import variance
+from scipy import interpolate
 import pyproj
 
 
@@ -189,9 +190,10 @@ class Proc_CEOS:
 
         img.seek(236)
         nline = int(img.read(8))
-        time_obs = np.arange(time_start, time_end, (time_end - time_start)/nline)
+        time_obs = np.arange(time_start, time_end,
+                             (time_end - time_start)/nline)
         time_pos = np.arange(start_time, start_time +
-                            time_interval*position_num, time_interval)
+                             time_interval*position_num, time_interval)
         pos_ary = []
 
         led.seek(720+4096+386)
@@ -211,6 +213,31 @@ class Proc_CEOS:
         pos = np.dstack((X, Y, Z))
 
         return pos[0][y:y+h, :]
+
+    def adjust_lonlat(self, lonlat, y, h, geo):
+        xyz2latlon = pyproj.Transformer.from_crs(7789, 4326)
+        latlon2xyz = pyproj.Transformer.from_crs(4326, 7789)
+
+        sat_pos = self.__get_sat_pos(y, h)
+        w = int(len(lonlat)/h)
+        new_lonlat = []
+        for i in range(len(sat_pos)):
+            sat_latlon = xyz2latlon.transform(
+                sat_pos[i][0], sat_pos[i][1], sat_pos[i][2])
+            for ll in lonlat[i*w:i*w+w]:
+                h = self.get_DEM(ll[0], ll[1]) + geo
+                obt_pos = latlon2xyz.transform(ll[1], ll[0], 0)
+                sl = np.linalg.norm(obt_pos-sat_pos[i])
+                gr_ob = np.sqrt(sl**2-sat_latlon[2]**2)
+                gr_true = np.sqrt(sl**2-(sat_latlon[2]-h)**2)
+                dis = np.linalg.norm(sat_pos[i][:2]-obt_pos[:2])
+                diff = gr_true-gr_ob
+                rx = (-diff*sat_pos[i][0]+(dis+diff)*obt_pos[0])/dis
+                ry = (-diff*sat_pos[i][1]+(dis+diff)*obt_pos[1])/dis
+                lat, lon, _ = xyz2latlon.transform(rx, ry, obt_pos[2])
+                new_lonlat.append((lon, lat))
+
+        return new_lonlat
 
     def save_gcp(self, x, y, w, h, folder=None, filename=None) -> None:
         """
