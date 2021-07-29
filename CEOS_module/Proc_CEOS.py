@@ -232,9 +232,8 @@ class Proc_CEOS:
                 gr_true = np.sqrt(sl**2-(sat_latlon[2]-h)**2)
                 dis = np.linalg.norm(sat_pos[i][:2]-obt_pos[:2])
                 diff = gr_true-gr_ob
-                rx = (-diff*sat_pos[i][0]+(dis+diff)*obt_pos[0])/dis
-                ry = (-diff*sat_pos[i][1]+(dis+diff)*obt_pos[1])/dis
-                lat, lon, _ = xyz2latlon.transform(rx, ry, obt_pos[2])
+                lat, lon = (ll[1]-sat_latlon[0])*(diff/dis) + ll[1],\
+                    (ll[0]-sat_latlon[1])*(diff/dis)+ll[0]
                 new_lonlat.append((lon, lat))
 
         return new_lonlat
