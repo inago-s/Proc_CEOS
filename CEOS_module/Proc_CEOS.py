@@ -75,6 +75,7 @@ class Proc_CEOS:
         self.cmap = None
         self.__main_file = ''
         self.__coefficient_lat = None
+        self.fx = self.fy = self.fz = self.time_obs = None
         filelist = os.listdir(folder)
 
         for file in filelist:
@@ -160,7 +161,7 @@ class Proc_CEOS:
 
         return img_output
 
-    def __get_sat_pos(self, y, h):
+    def __get_sat_pos(self):
         led = open(self.LED_file, mode='rb')
         img = open(self.__main_file, mode='rb')
         img.seek(720+44)
@@ -186,8 +187,7 @@ class Proc_CEOS:
 
         img.seek(236)
         nline = int(img.read(8))
-        time_obs = np.arange(time_start, time_end,
-                             (time_end - time_start)/nline)
+        self.time_obs = np.linspace(time_start, time_end, nline)
         time_pos = np.arange(start_time, start_time +
                              time_interval*position_num, time_interval)
         pos_ary = []
@@ -200,39 +200,53 @@ class Proc_CEOS:
             led.read(66)
         pos_ary = np.array(pos_ary).reshape(-1, 3)
 
-        fx = interpolate.interp1d(time_pos, pos_ary[:, 0], kind="cubic")
-        fy = interpolate.interp1d(time_pos, pos_ary[:, 1], kind="cubic")
-        fz = interpolate.interp1d(time_pos, pos_ary[:, 2], kind="cubic")
-        X = fx(time_obs)
-        Y = fy(time_obs)
-        Z = fz(time_obs)
-        pos = np.dstack((X, Y, Z))
+        self.fx = interpolate.interp1d(time_pos, pos_ary[:, 0], kind="cubic")
+        self.fy = interpolate.interp1d(time_pos, pos_ary[:, 1], kind="cubic")
+        self.fz = interpolate.interp1d(time_pos, pos_ary[:, 2], kind="cubic")
 
-        return pos[0][y:y+h, :]
+        led.close()
+        img.close()
 
-    def adjust_lonlat(self, lonlat, y, h, geo):
+    def adjust_lonlat(self, lonlat, y, geo):
+        """
+        DEMを用いて緯度経度変換の結果のズレを修正する
+
+        Parameters
+        ----------
+        lonlat : list
+            緯度経度のリスト
+        y : int
+            縦方向の開始位置
+        geo : int
+            ジオマス高さ
+        
+        Returns
+        -------
+        lonlat : list
+            補正後の緯度経度
+        """
+        if self.fx is None:
+            self.__get_sat_pos()
         xyz2latlon = pyproj.Transformer.from_crs(7789, 4326)
         latlon2xyz = pyproj.Transformer.from_crs(4326, 7789)
+        wgs84 = pyproj.Geod(ellps='WGS84')
+        lon, lat = lonlat[0]
 
-        sat_pos = self.__get_sat_pos(y, h)
-        w = int(len(lonlat)/h)
-        new_lonlat = []
-        for i in range(len(sat_pos)):
-            sat_latlon = xyz2latlon.transform(
-                sat_pos[i][0], sat_pos[i][1], sat_pos[i][2])
-            for ll in lonlat[i*w:i*w+w]:
-                h = self.get_DEM(ll[0], ll[1]) + geo
-                obt_pos = latlon2xyz.transform(ll[1], ll[0], 0)
-                sl = np.linalg.norm(obt_pos-sat_pos[i])
-                gr_ob = np.sqrt(sl**2-sat_latlon[2]**2)
-                gr_true = np.sqrt(sl**2-(sat_latlon[2]-h)**2)
-                dis = np.linalg.norm(sat_pos[i][:2]-obt_pos[:2])
-                diff = gr_true-gr_ob
-                lat, lon = (ll[1]-sat_latlon[0])*(diff/dis) + ll[1],\
-                    (ll[0]-sat_latlon[1])*(diff/dis)+ll[0]
-                new_lonlat.append((lon, lat))
+        sat_pos = np.array([self.fx(self.time_obs[y]),
+                            self.fy(self.time_obs[y]), self.fz(self.time_obs[y])])
+        sat_latlon = xyz2latlon.transform(sat_pos[0], sat_pos[1], sat_pos[2])
 
-        return new_lonlat
+        h = self.get_DEM(lon, lat)+geo
+        obt_pos = np.array(latlon2xyz.transform(lat, lon, 0))
+        sl = np.linalg.norm(obt_pos-sat_pos)
+        gr_ob = np.sqrt(sl**2-sat_latlon[2]**2)
+        gr_true = np.sqrt(sl**2-(sat_latlon[2]-h)**2)
+        _, _, distance = wgs84.inv(sat_latlon[1], sat_latlon[0], lon, lat)
+        diff = gr_true-gr_ob
+        adjust_lat = (lat-sat_latlon[0])*(diff/distance)
+        adjust_lon = (lon-sat_latlon[1])*(diff/distance)
+
+        return np.array(lonlat)+np.array([adjust_lon, adjust_lat])
 
     def save_gcp(self, x, y, w, h, folder=None, filename=None) -> None:
         """
@@ -786,6 +800,21 @@ class Proc_CEOS:
         return self.GT_IMG_LIST[filepath][h][w]
 
     def get_DEM(self, lon, lat) -> int:
+        """
+        指定の位置のDEMデータ（標高）の取得
+
+        Parameters
+        ----------
+        lat : float
+            緯度
+        lon : float
+            経度
+
+        Returns
+        -------
+        DEM : int
+            DEMの値（標高）
+        """
         filepath = os.path.join(self.DEM_PATH, 'ALPSMLC30_N' +
                                 str(int(lat)).zfill(3)+'E'+str(int(lon)).zfill(3)+'_DSM.tif')
 
