@@ -75,10 +75,6 @@ class Proc_CEOS:
         self.cmap = None
         self.__main_file = ''
         self.__coefficient_lat = None
-        self.__diff_origin_lon = self.__diff_origin_lat = None
-        self.__lon_func_x = self.__lon_func_y \
-            = self.__lat_func_x = self.__lat_func_y = None
-
         filelist = os.listdir(folder)
 
         for file in filelist:
