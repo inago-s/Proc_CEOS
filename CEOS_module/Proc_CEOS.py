@@ -219,7 +219,7 @@ class Proc_CEOS:
             縦方向の開始位置
         geo : int
             ジオマス高さ
-        
+
         Returns
         -------
         lonlat : list
@@ -411,18 +411,20 @@ class Proc_CEOS:
             filename = self.seen_id+'-'+str(y)+'-'+str(x)+'__' + 'GT.png'
         filepath = self.__make_filepath(folder, filename)
 
-        if 'ver2103' in self.GT_PATH:
-            plt.imsave(filepath, GT,
-                       cmap=self.__v2103cmap, vmin=0, vmax=13)
-        elif 'ver1803' in self.GT_PATH:
-            plt.imsave(filepath, GT,
-                       cmap=self.__v1803cmap, vmin=0, vmax=11)
-        else:
-            if not self.cmap:
-                print('you need set cmap')
-            else:
-                plt.imsave(filepath, GT,
-                           cmap=self.cmap, vmin=0, vmax=self.cmap.N)
+        Image.fromarray(GT).save(filepath)
+
+        # if 'ver2103' in self.GT_PATH:
+        #     plt.imsave(filepath, GT,
+        #                cmap=self.__v2103cmap, vmin=0, vmax=13)
+        # elif 'ver1803' in self.GT_PATH:
+        #     plt.imsave(filepath, GT,
+        #                cmap=self.__v1803cmap, vmin=0, vmax=11)
+        # else:
+        #     if not self.cmap:
+        #         print('you need set cmap')
+        #     else:
+        #         plt.imsave(filepath, GT,
+        #                    cmap=self.cmap, vmin=0, vmax=self.cmap.N)
 
     def save_DEM_img(self, DEM, x, y, w, h, folder=None, filename=None) -> None:
         """
