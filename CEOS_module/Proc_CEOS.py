@@ -314,8 +314,7 @@ class Proc_CEOS:
 
     def save_intensity_img(self, Pol_file, x=0, y=0, w=None, h=None, folder=None, filename=None) -> Tuple[np.ndarray, np.ndarray]:
         """
-        指定の位置，大きさの強度画像と位相画像を保存．
-        後方散乱強度と位相を出力
+        指定の位置，大きさの強度画像を保存．
 
         Parameters
         ----------
@@ -333,13 +332,6 @@ class Proc_CEOS:
             保存先フォルダのパス
         filename : str
             保存データのファイル名
-
-        Returns
-        -------
-        sigma : np.ndarray
-            後方散乱強度
-        phase : np.ndarray
-            位相
         """
 
         if x < 0 or x > self.ncell:
@@ -362,23 +354,17 @@ class Proc_CEOS:
             print('input error')
             exit()
 
-        sigma, phase = self.get_intensity(Pol_file, x, y, w, h)
+        sigma, _ = self.get_intensity(Pol_file, x, y, w, h)
         sigma_img = np.array(255*(sigma-np.amin(sigma)) /
                              (np.amax(sigma)-np.amin(sigma)), dtype="uint8")
         sigma_img = self.__leefilter(sigma_img, 9)
-        phase_img = np.array(255*(phase - np.amin(phase)) /
-                             (np.amax(phase) - np.amin(phase)), dtype="uint8")
-        phase_img = self.__leefilter(phase_img, 9)
 
         if not filename:
             filename = str(self.seen_id)+'-' + str(y)+'-' + \
-                str(x)+'__'+Pol_file.split('-')[2]
+                str(x)+'.png'
         filepath = self.__make_filepath(folder, filename)
 
-        plt.imsave(filepath+'_sigma.png', sigma_img, cmap='gray')
-        plt.imsave(filepath+'_pahse.png', phase_img, cmap='jet')
-
-        return sigma, phase
+        plt.imsave(filepath, sigma_img, cmap='gray')
 
     def save_GT_img(self, GT, x, y, w, h, folder=None, filename=None) -> None:
         """
