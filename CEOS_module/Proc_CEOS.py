@@ -435,7 +435,7 @@ class Proc_CEOS:
         DEM = np.rot90(DEM, -1)
 
         if not filename:
-            filename = self.seen_id+'-'+str(y)+'-'+str(x)+'__' + 'GT.png'
+            filename = self.seen_id+'-'+str(y)+'-'+str(x) + '.png'
         filepath = self.__make_filepath(folder, filename)
         plt.imsave(filepath, DEM, cmap='jet')
 
@@ -475,7 +475,7 @@ class Proc_CEOS:
                          cv2.equalizeHist(g), cv2.equalizeHist(b)])
 
         if not filename:
-            filename = self.seen_id+'-'+str(y)+'-'+str(x)+'__' + 'Pauli.png'
+            filename = self.seen_id+'-'+str(y)+'-'+str(x)+'.png'
         filepath = self.__make_filepath(folder, filename)
 
         plt.imsave(filepath, img)
