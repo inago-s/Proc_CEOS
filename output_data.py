@@ -6,12 +6,8 @@ from tqdm import tqdm
 
 
 def main():
-    C = Proc_CEOS('../ALOS2024040390-141102')
-    colors = ['#ffffff', '#000064', '#ff0000', '#0080ff', '#ffc1bf',
-              '#ffff00', '#ff6533', '#806400', '#05fc81', '#007c3d']
-
-    C.set_cmap(colors)
-    C.set_GT('../ver1609VT15_LC_GeoTiff/')
+    C = Proc_CEOS('')
+    C.set_GT('')
 
     filename = C.seen_id+'.png'
 
