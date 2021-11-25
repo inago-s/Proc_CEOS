@@ -368,7 +368,7 @@ class Proc_CEOS:
 
     def save_GT_img(self, GT, x, y, w, h, folder=None, filename=None) -> None:
         """
-        GT画像の作成
+        GT画像の作成(グレー)
 
         Parameters
         ----------
@@ -387,6 +387,11 @@ class Proc_CEOS:
         filename : str
             保存データのファイル名
         """
+        
+        if self.GT_PATH is None:
+            print('please set GT images folder path with set_DEM function.')
+            exit()
+
         GT = np.array(GT)
         GT = GT.reshape(h, w)
         GT = np.flipud(GT)
@@ -398,22 +403,78 @@ class Proc_CEOS:
         filepath = self.__make_filepath(folder, filename)
 
         Image.fromarray(GT).save(filepath)
+    
+    def save_color_GT_img(self, GT, x, y, w, h, folder=None, filename=None) -> None:
+        """
+        GT画像の作成(カラー)
 
-        # if 'ver2103' in self.GT_PATH:
-        #     plt.imsave(filepath, GT,
-        #                cmap=self.__v2103cmap, vmin=0, vmax=13)
-        # elif 'ver1803' in self.GT_PATH:
-        #     plt.imsave(filepath, GT,
-        #                cmap=self.__v1803cmap, vmin=0, vmax=11)
-        # else:
-        #     if not self.cmap:
-        #         print('you need set cmap')
-        #     else:
-        #         plt.imsave(filepath, GT,
-        #                    cmap=self.cmap, vmin=0, vmax=self.cmap.N)
+        Parameters
+        ----------
+        GT : list
+            GTデータの配列
+        x : int
+            横方向の開始位置
+        y : int
+            縦方向の開始位置
+        w : int
+            幅
+        h : int
+            高さ
+        folder : str
+            保存先フォルダのパス
+        filename : str
+            保存データのファイル名
+        """
+        
+        if self.GT_PATH is None:
+            print('please set GT images folder path with set_DEM function.')
+            exit()
+            
+        GT = np.array(GT)
+        GT = GT.reshape(h, w)
+        GT = np.flipud(GT)
+        GT = np.rot90(GT, -1)
+        GT[GT == 255] = 0
+        
+        if not filename:
+            filename = self.seen_id+'-'+str(y)+'-'+str(x) + '.png'
+        filepath = self.__make_filepath(folder, filename)
+        
+        if 'ver2103' in self.GT_PATH:
+            plt.imsave(filepath, GT,
+                       cmap=self.__v2103cmap, vmin=0, vmax=13)
+        elif 'ver1803' in self.GT_PATH:
+            plt.imsave(filepath, GT,
+                       cmap=self.__v1803cmap, vmin=0, vmax=11)
+        else:
+            if not self.cmap:
+                print('if you use origin colormap you need set colormap with set_cmap function.')
+            else:
+                plt.imsave(filepath, GT,
+                           cmap=self.cmap, vmin=0, vmax=self.cmap.N)
+        
 
     def save_DEM_img(self, DEM, x, y, w, h, folder=None, filename=None) -> None:
         """
+        DEM画像の保存
+        
+        Parameters
+        ----------
+        DEM : list
+            DEMデータの配列
+        x : int
+            横方向の開始位置
+        y : int
+            縦方向の開始位置
+        w : int
+            幅
+        h : int
+            高さ
+        folder : str
+            保存先フォルダのパス
+        filename : str
+            保存データのファイル名
+        
         """
         DEM = np.array(DEM)
         DEM = DEM.reshape(h, w)
