@@ -11,6 +11,7 @@ from scipy.ndimage.filters import uniform_filter
 from scipy.ndimage.measurements import variance
 from scipy import interpolate
 import pyproj
+from joblib import Parallel, delayed
 
 
 class Proc_CEOS:
@@ -48,8 +49,6 @@ class Proc_CEOS:
             GTのフォルダパス（高解像度土地利用土地被覆図など）
         GT_IMG_LIST : dic
             利用したGT画像のキャッシュ
-        cmap : list
-            カスタムのカラーマップ
         nline : int
             SARイメージのライン数（高さ）
         ncell : int
@@ -58,8 +57,6 @@ class Proc_CEOS:
             SARリーダのファイルパス
         seen_id : str
             処理対象データのシーンID
-        coordinate_flag : bool
-            緯度経度変換係数での誤差の有無
         v21_colors : list
             高解像度土地利用土地被覆図ver21のカラーリスト
         v18_colors : list
@@ -72,7 +69,7 @@ class Proc_CEOS:
         self.DEM_PATH = ''
         self.GT_IMG_LIST = {}
         self.DEM_IMG_LIST = {}
-        self.cmap = None
+        self.__cmap = None
         self.__main_file = ''
         self.__coefficient_lat = None
         self.fx = self.fy = self.fz = self.time_obs = None
@@ -138,10 +135,13 @@ class Proc_CEOS:
             print('LED file connot be found.')
             exit()
 
-    def __make_filepath(self, folder, name) -> str:
+    def __make_filepath(self, type, folder, name) -> str:
         if folder is None:
-            return os.path.join(self.folder, name)
+            path = os.path.join(self.folder, type)
+            os.makedirs(path, exist_ok=True)
+            return os.path.join(path, name)
         else:
+            os.makedirs(folder, exist_ok=True)
             return os.path.join(folder, name)
 
     def __normalization(self, x) -> np.ndarray:
@@ -207,7 +207,7 @@ class Proc_CEOS:
         led.close()
         img.close()
 
-    def adjust_lonlat(self, lonlat, y, geo):
+    def adjust_lonlat(self, lonlat, y, geo=0):
         """
         DEMを用いて緯度経度変換の結果のズレを修正する
 
@@ -270,7 +270,7 @@ class Proc_CEOS:
 
         if not filename:
             filename = self.seen_id+'-'+str(y)+'-'+str(x)+'.points'
-        filepath = self.__make_filepath(folder, filename)
+        filepath = self.__make_filepath('gcp', folder, filename)
 
         with open(filepath, mode='w') as f:
             s = ""
@@ -284,19 +284,31 @@ class Proc_CEOS:
                     [str(_x), str(_y), str(lon), str(lat)])
             f.write(s)
 
-    def save_intensity_OverAllimg(self, Pol_file, folder=None, filename=None) -> None:
+    def save_intensity_overall_img(self, Pol, folder=None, filename=None) -> None:
         """
         全体の強度画像を保存
 
         Parameters
         ----------
-        Pol_file : str
+        Pol : str
             SARイメージのパス
         folder : str
             保存先フォルダのパス
         filename : str
             保存データのファイル名
         """
+
+        if Pol == 'HH':
+            Pol_file = self.HH_file
+        elif Pol == 'HV':
+            Pol_file = self.HV_file
+        elif Pol == 'VH':
+            Pol_file = self.VH_file
+        elif Pol == 'VV':
+            Pol_file = self.VV_file
+        else:
+            print('Polarization is "HH" or "HV" or "VH" or "VV"')
+            exit()
 
         img = np.empty((self.nline, self.ncell), dtype='float32')
         for h in range(self.nline):
@@ -307,19 +319,19 @@ class Proc_CEOS:
                        (np.amax(img)-np.amin(img)), dtype="uint8")
 
         if not filename:
-            filename = str(self.seen_id)+'.png'
-        filepath = self.__make_filepath(folder, filename)
+            filename = str(self.seen_id)+'_'+Pol+'.png'
+        filepath = self.__make_filepath(Pol, folder, filename)
 
         plt.imsave(filepath, img, cmap='gray')
 
-    def save_intensity_img(self, Pol_file, x=0, y=0, w=None, h=None, folder=None, filename=None) -> Tuple[np.ndarray, np.ndarray]:
+    def save_intensity_img(self, Pol, x=0, y=0, w=None, h=None, folder=None, filename=None) -> None:
         """
         指定の位置，大きさの強度画像を保存．
 
         Parameters
         ----------
-        Pol_file : str
-            SARイメージのパス
+        Pol : str
+            偏波("HH" or "HV" or "VH" or "VV")
         x : int
             横方向の開始位置
         y : int
@@ -354,6 +366,18 @@ class Proc_CEOS:
             print('input error')
             exit()
 
+        if Pol == 'HH':
+            Pol_file = self.HH_file
+        elif Pol == 'HV':
+            Pol_file = self.HV_file
+        elif Pol == 'VH':
+            Pol_file = self.VH_file
+        elif Pol == 'VV':
+            Pol_file = self.VV_file
+        else:
+            print('Polarization is "HH" or "HV" or "VH" or "VV"')
+            exit()
+
         sigma, _ = self.get_intensity(Pol_file, x, y, w, h)
         sigma_img = np.array(255*(sigma-np.amin(sigma)) /
                              (np.amax(sigma)-np.amin(sigma)), dtype="uint8")
@@ -361,19 +385,17 @@ class Proc_CEOS:
 
         if not filename:
             filename = str(self.seen_id)+'-' + str(y)+'-' + \
-                str(x)+'.png'
-        filepath = self.__make_filepath(folder, filename)
+                str(x)+'_'+Pol+'.png'
+        filepath = self.__make_filepath(Pol, folder, filename)
 
         plt.imsave(filepath, sigma_img, cmap='gray')
 
-    def save_GT_img(self, GT, x, y, w, h, folder=None, filename=None) -> None:
+    def save_GT_img(self, x, y, w, h, folder=None, filename=None, n_jobs=-1) -> None:
         """
-        GT画像の作成(グレー)
+        GT画像の作成
 
         Parameters
         ----------
-        GT : list
-            GTデータの配列
         x : int
             横方向の開始位置
         y : int
@@ -386,11 +408,18 @@ class Proc_CEOS:
             保存先フォルダのパス
         filename : str
             保存データのファイル名
+        n_jobs : int
+            並列処理でのCPUのコア数
+            デフォルトは全コア数
         """
-        
-        if self.GT_PATH is None:
-            print('please set GT images folder path with set_DEM function.')
-            exit()
+
+        lonlat = Parallel(n_jobs=n_jobs)(delayed(self.get_coordinate)
+                                         (s_x, s_y)for s_x, s_y in itertools.product(range(x, x+h), range(y, y+h)))
+
+        lonlat = self.adjust_lonlat(lonlat, y)
+
+        GT = Parallel(n_jobs=-1, require='sharedmem')(delayed(self.get_GT)
+                                                             (ll[0], ll[1])for ll in lonlat)
 
         GT = np.array(GT)
         GT = GT.reshape(h, w)
@@ -399,19 +428,17 @@ class Proc_CEOS:
         GT[GT == 255] = 0
 
         if not filename:
-            filename = self.seen_id+'-'+str(y)+'-'+str(x)+'__' + 'GT.png'
-        filepath = self.__make_filepath(folder, filename)
+            filename = self.seen_id+'-'+str(y)+'-'+str(x)+'_' + 'GT.png'
+        filepath = self.__make_filepath('GT', folder, filename)
 
         Image.fromarray(GT).save(filepath)
-    
-    def save_color_GT_img(self, GT, x, y, w, h, folder=None, filename=None) -> None:
+
+    def save_GT_color_img(self, x, y, w, h, cmap, folder=None, filename=None, n_jobs=-1) -> None:
         """
-        GT画像の作成(カラー)
+        GTカラー画像の作成
 
         Parameters
         ----------
-        GT : list
-            GTデータの配列
         x : int
             横方向の開始位置
         y : int
@@ -420,48 +447,61 @@ class Proc_CEOS:
             幅
         h : int
             高さ
+        cmap : str
+            カラーマップ
+            ver21は"v21"
+            ver18は"v18"
+            独自のカラーマップは"custom"
         folder : str
             保存先フォルダのパス
         filename : str
             保存データのファイル名
+        n_jobs : int
+            並列処理でのCPUのコア数
+            デフォルトは全コア数
         """
-        
-        if self.GT_PATH is None:
-            print('please set GT images folder path with set_DEM function.')
-            exit()
-            
+
+        lonlat = Parallel(n_jobs=n_jobs)(delayed(self.get_coordinate)
+                                         (s_x, s_y)for s_x, s_y in itertools.product(range(x, x+h), range(y, y+h)))
+
+        lonlat = self.adjust_lonlat(lonlat, y)
+
+        GT = Parallel(n_jobs=-1, require='sharedmem')(delayed(self.get_GT)
+                                                             (ll[0], ll[1])for ll in lonlat)
+
         GT = np.array(GT)
         GT = GT.reshape(h, w)
         GT = np.flipud(GT)
         GT = np.rot90(GT, -1)
         GT[GT == 255] = 0
-        
+
         if not filename:
-            filename = self.seen_id+'-'+str(y)+'-'+str(x) + '.png'
-        filepath = self.__make_filepath(folder, filename)
-        
-        if 'ver2103' in self.GT_PATH:
+            filename = self.seen_id+'-'+str(y)+'-'+str(x)+'_' + 'GT_color.png'
+        filepath = self.__make_filepath('GT_color', folder, filename)
+
+        if cmap == 'v21':
             plt.imsave(filepath, GT,
                        cmap=self.__v2103cmap, vmin=0, vmax=13)
-        elif 'ver1803' in self.GT_PATH:
+        elif cmap == 'v18':
             plt.imsave(filepath, GT,
                        cmap=self.__v1803cmap, vmin=0, vmax=11)
-        else:
-            if not self.cmap:
-                print('if you use origin colormap you need set colormap with set_cmap function.')
+        elif cmap == 'custom':
+            if not self.__cmap:
+                print('you need set cmap')
             else:
                 plt.imsave(filepath, GT,
-                           cmap=self.cmap, vmin=0, vmax=self.cmap.N)
-        
+                           cmap=self.__cmap, vmin=0, vmax=self.__cmap.N)
+        else:
+            print('cmap is "v18" or "v21" or "custom"')
 
     def save_DEM_img(self, DEM, x, y, w, h, folder=None, filename=None) -> None:
         """
-        DEM画像の保存
-        
+        DEM画像の作成
+
         Parameters
         ----------
         DEM : list
-            DEMデータの配列
+            GTデータの配列
         x : int
             横方向の開始位置
         y : int
@@ -474,7 +514,6 @@ class Proc_CEOS:
             保存先フォルダのパス
         filename : str
             保存データのファイル名
-        
         """
         DEM = np.array(DEM)
         DEM = DEM.reshape(h, w)
@@ -483,7 +522,7 @@ class Proc_CEOS:
 
         if not filename:
             filename = self.seen_id+'-'+str(y)+'-'+str(x) + '.png'
-        filepath = self.__make_filepath(folder, filename)
+        filepath = self.__make_filepath('DEM', folder, filename)
         plt.imsave(filepath, DEM, cmap='jet')
 
     def save_Pauli_img(self, x, y, w, h, folder=None, filename=None) -> None:
@@ -523,7 +562,7 @@ class Proc_CEOS:
 
         if not filename:
             filename = self.seen_id+'-'+str(y)+'-'+str(x)+'.png'
-        filepath = self.__make_filepath(folder, filename)
+        filepath = self.__make_filepath('Pauli', folder, filename)
 
         plt.imsave(filepath, img)
 
@@ -611,8 +650,9 @@ class Proc_CEOS:
         fv = self.__leefilter(cv2.equalizeHist(sigma), 9).astype('uint8')
 
         if not filename:
-            filename = self.seen_id+'-'+str(y)+'-'+str(x)+'__' + 'Pauli.png'
-        filepath = self.__make_filepath(folder, filename)
+            filename = self.seen_id+'-' + \
+                str(y)+'-'+str(x)+'__' + 'coherency.png'
+        filepath = self.__make_filepath('coherency', folder, filename)
 
         img = np.dstack((fd, fv, fs))
 
@@ -887,7 +927,7 @@ class Proc_CEOS:
         colors : list
         色の配列
         """
-        self.cmap = ListedColormap(colors, name='custom')
+        self.__cmap = ListedColormap(colors, name='custom')
 
     def set_GT(self, folder) -> None:
         """
