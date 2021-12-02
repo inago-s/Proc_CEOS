@@ -1,45 +1,37 @@
 from CEOS_module.Proc_CEOS import Proc_CEOS
 import itertools
-from joblib import Parallel, delayed
 import numpy as np
 from tqdm import tqdm
 
 
 def main():
+    # ALOS2 CEOSデータを読み込んだインスタンスを作成
     C = Proc_CEOS('')
+
+    # GTフォルダパスの設定
     C.set_GT('')
 
-    filename = C.seen_id+'.png'
+    # DEMフォルダパスの設定
+    C.set_DEM('')
 
-    latlon = Parallel(n_jobs=-1)(delayed(C.get_coordinate)
-                                 (s_x, s_y)for s_x, s_y in itertools.product(range(C.ncell), range(C.nline)))
+    # 画像の縦横の大きさ指定
+    h, w = 256, 256
 
-    class_num = Parallel(n_jobs=-1, require='sharedmem')(delayed(C.get_GT)
-                                                         (ll[1], ll[0])for ll in latlon)
-
-    C.save_GT_img(class_num, 0, 0, C.ncell, C.nline, 'demo-GT', filename)
-    Pol_L = [C.HH_file, C.HV_file, C.VV_file, C.VH_file]
-    n = len(Pol_L)
-
-    h, w = 1024, 1024
-
+    # ループ処理のため開始位置のリストを取得
     s_x_list = np.array([i*w for i in range(int(C.ncell/w))])
     s_y_list = np.array([i*h for i in range(int(C.nline/h))])
 
-    # s_x_list = [2000]
-    # s_y_list = [15000]
-
+    bar = tqdm(total=len(s_x_list)*len(s_y_list))
     for x, y in tqdm(itertools.product(s_x_list, s_y_list)):
-        filename = C.seen_id+'-'+str(y)+'-'+str(x)+'.png'
-        C.save_Pauli_img(x, y, w, h, 'demo-image', filename)
+        # 強度画像（他の偏波は"HH"の部分を変更すれば良い）
+        C.save_intensity_img('HH', x, y, w, h)
 
-    latlon = Parallel(n_jobs=-1)(delayed(C.get_coordinate)
-                                 (s_x, s_y)for s_x, s_y in itertools.product(range(x, x+h), range(y, y+h)))
+        # Pauli画像
+        C.save_Pauli_img(x, y, w, h)
 
-    class_num = Parallel(n_jobs=-1, require='sharedmem')(delayed(C.get_GT)
-                                                         (ll[1], ll[0])for ll in latlon)
-
-    C.save_GT_img(class_num, x, y, w, h, 'demo-GT', filename)
+        # GTモノクロ画像
+        C.save_GT_img(x, y, w, h, 'v21')
+        bar.update(1)
 
 
 if __name__ == '__main__':
